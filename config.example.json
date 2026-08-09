@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "workspace": {
+    "root": "C:\\Users\\YOUR_NAME\\Projects",
+    "scanDepth": 1,
+    "allowReparsePoints": false
+  },
+  "runtime": {
+    "stateDirectory": "C:\\Users\\YOUR_NAME\\.codex-dispatch"
+  },
+  "controlPlane": {
+    "provider": "github",
+    "repository": "YOUR_GITHUB_USER/YOUR_PRIVATE_CONTROL_REPO",
+    "defaultBranch": "main",
+    "issueAssignee": "YOUR_GITHUB_USER"
+  },
+  "routing": {
+    "fast": {
+      "enabled": true,
+      "minimumStrongScore": 120,
+      "minimumLead": 60
+    },
+    "slow": {
+      "enabled": true,
+      "timeoutSeconds": 180
+    }
+  },
+  "codex": {
+    "command": "codex",
+    "workerSandbox": "workspace-write",
+    "routerSandbox": "read-only",
+    "approvalPolicy": "never"
+  },
+  "privacy": {
+    "exposeLocalPathsInIssues": false,
+    "exposeThreadIdsInIssues": false,
+    "includeOriginalTaskInIssues": true
+  },
+  "safety": {
+    "restrictToWorkspaceRoot": true,
+    "requireExplicitAuthorizationFor": [
+      "push",
+      "merge",
+      "publish",
+      "deploy",
+      "create-pr",
+      "remote-permission-change",
+      "mass-delete",
+      "real-money-spend"
+    ]
+  }
+}
