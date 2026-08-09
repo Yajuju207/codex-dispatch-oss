@@ -1,0 +1,32 @@
+# Secrets and credentials
+*.token
+*.secret
+.env
+.env.*
+
+# Codex / local runtime state
+.codex/
+.codex-dispatch/
+.codex-dispatch-state/
+
+# Local machine configuration
+config.local.json
+
+# GitHub runner credentials and runtime data
+.runner
+.credentials
+.credentials_rsaparams
+_diag/
+_work/
+
+# Generated indexes and caches
+project-index.json
+projects-discovered.json
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
