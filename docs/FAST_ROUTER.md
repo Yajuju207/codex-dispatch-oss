@@ -43,7 +43,7 @@ Fast Router 同时验证 Project Index v1 的生成上限：
 - 每个规范化 token 的长度必须为 2–128 个字符（忽略 separator）；
 - `indexedTrackedPathCount` 最多为 5000，且不能大于 `trackedPathCount`。
 
-每个 `localPath` 必须是绝对路径。Fast Router 使用 `GetFullPath` 做纯词法规范化，并要求结果等于配置的 `workspace.root` 或位于其目录分隔符边界之下；相邻前缀（例如根目录 `D:\projects` 与候选 `D:\projects2\x`）不属于 workspace。
+每个 `localPath` 必须是绝对路径。Fast Router 使用 `GetFullPath` 做纯词法规范化，并要求结果严格位于配置的 `workspace.root` 目录分隔符边界之下；`workspace.root` 自身与相邻前缀（例如根目录 `D:\projects` 与候选 `D:\projects2\x`）都不属于合法项目范围。
 
 缺失、损坏、不支持的版本或不符合 schema 的索引会抛出统一错误，不会静默返回 `no_match`。
 

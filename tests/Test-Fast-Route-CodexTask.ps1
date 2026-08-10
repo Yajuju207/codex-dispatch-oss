@@ -266,7 +266,7 @@ try {
     Assert-Equal $result.lead 180 '单项目 lead'
     Assert-Equal $result.selectedProject.name 'alpha-project' '选中项目'
     Assert-Equal $result.candidates[0].matchedSignals[0].kind 'project_name' 'identity signal 类型'
-    Write-Host 'PASS 1/26：direct project name strong'
+    Write-Host 'PASS 1/28：direct project name strong'
     $passed++
 
     # 2. repository name 是强 identity 证据。
@@ -283,7 +283,7 @@ try {
     Assert-Equal $result.topScore 180 'repository name 分数'
     Assert-Equal $result.selectedProject.name 'local-folder' 'repository identity 选中项目'
     Assert-Equal $result.candidates[0].matchedSignals[0].kind 'repository_name' 'repository signal 类型'
-    Write-Host 'PASS 2/26：repository identity strong'
+    Write-Host 'PASS 2/28：repository identity strong'
     $passed++
 
     # 3. 唯一长 token 80+60=140，可单独 strong。
@@ -306,7 +306,7 @@ try {
     Assert-Equal $result.lead 140 '唯一长 token lead'
     Assert-Equal $result.selectedProject.name 'mod-one' '唯一长 token 选中项目'
     Assert-Equal $result.candidates[0].matchedSignals[0].uniqueBonus 60 '唯一长 token bonus'
-    Write-Host 'PASS 3/26：unique long token strong'
+    Write-Host 'PASS 3/28：unique long token strong'
     $passed++
 
     # 4. 两个唯一中等 token 各 35+25，合计 120。
@@ -328,7 +328,7 @@ try {
     Assert-Equal $result.topScore 120 '多个中等 token 总分'
     Assert-Equal $result.lead 120 '多个中等 token lead'
     Assert-Equal $result.candidates[0].matchedSignals.Count 2 '两个 matched token'
-    Write-Host 'PASS 4/26：multiple medium tokens strong'
+    Write-Host 'PASS 4/28：multiple medium tokens strong'
     $passed++
 
     # 5. shared token 无唯一 bonus，且并列 ambiguous。
@@ -351,7 +351,7 @@ try {
     Assert-Equal $result.lead 0 'shared token lead'
     Assert-Equal $result.candidates[0].name 'alpha' '并列时 name ordinal 排序'
     Assert-Equal $result.candidates[0].matchedSignals[0].uniqueBonus 0 'shared token 无 bonus'
-    Write-Host 'PASS 5/26：shared token ambiguous'
+    Write-Host 'PASS 5/28：shared token ambiguous'
     $passed++
 
     # 6. 3 字符弱 token 只有 15 分。
@@ -368,7 +368,7 @@ try {
     Assert-Equal $result.topScore 15 '弱 token 分数'
     Assert-Equal $result.lead 15 '弱 token lead'
     Assert-True -Condition ($null -eq $result.selectedProject) -Message 'ambiguous 不应选中项目'
-    Write-Host 'PASS 6/26：weak token ambiguous'
+    Write-Host 'PASS 6/28：weak token ambiguous'
     $passed++
 
     # 7. 所有项目 0 分时 no_match。
@@ -390,7 +390,7 @@ try {
     Assert-Equal $result.topScore 0 'no_match topScore'
     Assert-Equal $result.lead 0 'no_match lead'
     Assert-True -Condition ($null -eq $result.selectedProject) -Message 'no_match 不应选中项目'
-    Write-Host 'PASS 7/26：no match'
+    Write-Host 'PASS 7/28：no match'
     $passed++
 
     # 8. 中文项目名允许出现在无空格中文句子中。
@@ -406,7 +406,7 @@ try {
     Assert-Equal $result.status 'strong' '中文 identity 应 strong'
     Assert-Equal $result.topScore 180 '中文 identity 分数'
     Assert-Equal $result.selectedProject.name '王二卡牌' '中文项目选择'
-    Write-Host 'PASS 8/26：Chinese project identity'
+    Write-Host 'PASS 8/28：Chinese project identity'
     $passed++
 
     # 9. 大小写与指定 separator 等价。
@@ -421,7 +421,7 @@ try {
     $result = Invoke-TestRouter -Task 'fix CODEX-dispatch/router now' -Case $case
     Assert-Equal $result.status 'strong' 'case/separator normalization 应 strong'
     Assert-Equal $result.topScore 180 'case/separator identity 分数'
-    Write-Host 'PASS 9/26：case/separator normalization'
+    Write-Host 'PASS 9/28：case/separator normalization'
     $passed++
 
     # 10. disabled 不读取缺失 index。
@@ -430,7 +430,7 @@ try {
     Assert-Equal $result.status 'disabled' 'fast.enabled=false 应 disabled'
     Assert-Equal $result.topScore 0 'disabled topScore'
     Assert-Equal $result.candidates.Count 0 'disabled candidates'
-    Write-Host 'PASS 10/26：fast disabled'
+    Write-Host 'PASS 10/28：fast disabled'
     $passed++
 
     # 11. 缺失或损坏 index 都使用统一错误，不降级 no_match。
@@ -446,7 +446,7 @@ try {
     Assert-FastRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'Project Index 不是有效 JSON'
-    Write-Host 'PASS 11/26：invalid/missing index unified error'
+    Write-Host 'PASS 11/28：invalid/missing index unified error'
     $passed++
 
     # 12. 排名、topScore、lead 与解释输出完全确定。
@@ -482,7 +482,7 @@ try {
         (ConvertTo-Json -InputObject $first -Depth 10) `
         (ConvertTo-Json -InputObject $second -Depth 10) `
         '重复路由输出必须相同'
-    Write-Host 'PASS 12/26：deterministic ranking / topScore / lead'
+    Write-Host 'PASS 12/28：deterministic ranking / topScore / lead'
     $passed++
 
     # 13. 完整 owner/repository 使用 220 分且优先于 repository name。
@@ -501,7 +501,7 @@ try {
     Assert-Equal $result.topScore 220 'owner/repository 分数'
     Assert-Equal $result.candidates[0].matchedSignals.Count 1 '只保留最具体 identity'
     Assert-Equal $result.candidates[0].matchedSignals[0].kind 'owner_repository' '完整 repository signal'
-    Write-Host 'PASS 13/26：owner/repository identity'
+    Write-Host 'PASS 13/28：owner/repository identity'
     $passed++
 
     # 14. 内置 stop tokens 不产生 token 分数。
@@ -524,7 +524,7 @@ try {
     Assert-Equal $result.status 'no_match' 'stop tokens 不应匹配'
     Assert-Equal $result.topScore 0 'stop tokens 总分'
     Assert-Equal $result.candidates[0].matchedSignals.Count 0 'stop tokens 无 signal'
-    Write-Host 'PASS 14/26：stop tokens ignored'
+    Write-Host 'PASS 14/28：stop tokens ignored'
     $passed++
 
     # 15. 同一规范化 token 每项目只计一次。
@@ -539,7 +539,7 @@ try {
     $result = Invoke-TestRouter -Task 'eternalwaiting' -Case $case
     Assert-Equal $result.topScore 140 '重复 token 只计一次'
     Assert-Equal $result.candidates[0].matchedSignals.Count 1 '重复 token 只有一个 signal'
-    Write-Host 'PASS 15/26：matched token deduplicated'
+    Write-Host 'PASS 15/28：matched token deduplicated'
     $passed++
 
     # 16. 不支持的 index schema version 是系统错误。
@@ -552,7 +552,7 @@ try {
     Assert-FastRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '不支持 Project Index version=2'
-    Write-Host 'PASS 16/26：invalid index schema unified error'
+    Write-Host 'PASS 16/28：invalid index schema unified error'
     $passed++
 
     # 17. 缺失或损坏配置统一包装为快速路由错误。
@@ -569,7 +569,7 @@ try {
     Assert-FastRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '无法加载配置'
-    Write-Host 'PASS 17/26：invalid/missing config unified error'
+    Write-Host 'PASS 17/28：invalid/missing config unified error'
     $passed++
 
     # 18. 合法空索引是 no_match，而不是系统错误。
@@ -580,7 +580,7 @@ try {
     Assert-Equal $result.topScore 0 '空索引 topScore'
     Assert-Equal $result.lead 0 '空索引 lead'
     Assert-Equal $result.candidates.Count 0 '空索引 candidates'
-    Write-Host 'PASS 18/26：empty index no_match'
+    Write-Host 'PASS 18/28：empty index no_match'
     $passed++
 
     # 19. Task 必须是非空字符串，且先于配置/index 访问验证。
@@ -588,7 +588,7 @@ try {
     Assert-FastRouterError `
         -Action { Invoke-TestRouter -Task '   ' -Case $case } `
         -ExpectedText 'Task 必须是非空字符串'
-    Write-Host 'PASS 19/26：empty task unified error'
+    Write-Host 'PASS 19/28：empty task unified error'
     $passed++
 
     # 20. workspace 外路径必须作为 Index 合同错误拒绝。
@@ -603,7 +603,7 @@ try {
     Assert-FastRouterError `
         -Action { Invoke-TestRouter -Task 'outside project' -Case $case } `
         -ExpectedText 'localPath 超出 workspace.root'
-    Write-Host 'PASS 20/26：workspace 外路径拒绝'
+    Write-Host 'PASS 20/28：workspace 外路径拒绝'
     $passed++
 
     # 21. workspace 名称的相邻前缀不是 workspace 子目录。
@@ -618,7 +618,7 @@ try {
     Assert-FastRouterError `
         -Action { Invoke-TestRouter -Task 'adjacent project' -Case $case } `
         -ExpectedText 'localPath 超出 workspace.root'
-    Write-Host 'PASS 21/26：workspace 相邻前缀路径拒绝'
+    Write-Host 'PASS 21/28：workspace 相邻前缀路径拒绝'
     $passed++
 
     # 22. workspace 内的规范绝对路径仍可正常路由。
@@ -637,7 +637,7 @@ try {
         $result.selectedProject.localPath `
         ([System.IO.Path]::GetFullPath($insidePath)) `
         '输出应使用规范化的 workspace 内路径'
-    Write-Host 'PASS 22/26：合法 workspace 内路径通过'
+    Write-Host 'PASS 22/28：合法 workspace 内路径通过'
     $passed++
 
     # 23. Project Index v1 每项目最多包含 4096 个 tokens。
@@ -657,7 +657,7 @@ try {
     Assert-FastRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'tokens 不能超过 4096 个'
-    Write-Host 'PASS 23/26：4097 tokens 拒绝'
+    Write-Host 'PASS 23/28：4097 tokens 拒绝'
     $passed++
 
     # 24. 规范化 token 长度必须符合 Project Index v1 的 2-128 字符合同。
@@ -672,7 +672,7 @@ try {
     Assert-FastRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '规范长度必须是 2 到 128 个字符'
-    Write-Host 'PASS 24/26：超长 token 拒绝'
+    Write-Host 'PASS 24/28：超长 token 拒绝'
     $passed++
 
     # 25. indexedTrackedPathCount 不能超过 Project Index v1 的 5000 上限。
@@ -688,7 +688,7 @@ try {
     Assert-FastRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'indexedTrackedPathCount 不能超过 5000'
-    Write-Host 'PASS 25/26：indexedTrackedPathCount 超限拒绝'
+    Write-Host 'PASS 25/28：indexedTrackedPathCount 超限拒绝'
     $passed++
 
     # 26. 合同上限内的 4096 tokens 使用非二次排序并在宽松时限内完成。
@@ -712,10 +712,84 @@ try {
     Assert-True `
         -Condition ($stopwatch.ElapsedMilliseconds -lt 30000) `
         -Message "4096-token 路由耗时不应超过宽松的 30 秒上限；实际 $($stopwatch.ElapsedMilliseconds) ms"
-    Write-Host ("PASS 26/26：4096-token benchmark（{0} ms）" -f $stopwatch.ElapsedMilliseconds)
+    Write-Host ("PASS 26/28：4096-token benchmark（{0} ms）" -f $stopwatch.ElapsedMilliseconds)
     $passed++
 
-    Write-Host "全部快速路由测试通过（$passed/26）。"
+    # 27. workspace.root 自身不是 Project Index Builder 允许的项目路径。
+    $case = New-TestCase -Parent $testRoot -Name 'workspace-root-project'
+    Write-TestIndex -IndexPath $case.Index -Projects @(
+        (New-TestProject `
+            -Name 'workspace-root-project' `
+            -LocalPath $case.Workspace `
+            -GitHubRepository $null `
+            -Tokens @())
+    )
+    Assert-FastRouterError `
+        -Action { Invoke-TestRouter -Task 'workspace root project' -Case $case } `
+        -ExpectedText 'localPath 超出 workspace.root'
+    Write-Host 'PASS 27/28：workspace.root 自身拒绝'
+    $passed++
+
+    # 28. 4096 个逆序候选使用非二次排序，且重复运行输出一致。
+    $case = New-TestCase -Parent $testRoot -Name 'maximum-candidates'
+    $maximumCandidates = @(
+        foreach ($repository in @('owner/first', 'owner/second', 'owner/third')) {
+            New-TestProject `
+                -Name 'project-0000' `
+                -LocalPath (Join-Path $case.Workspace 'project-0000') `
+                -GitHubRepository $repository `
+                -Tokens @()
+        }
+        for ($candidateIndex = 4093; $candidateIndex -ge 1; $candidateIndex--) {
+            $candidateName = 'project-{0:D4}' -f $candidateIndex
+            New-TestProject `
+                -Name $candidateName `
+                -LocalPath (Join-Path $case.Workspace $candidateName) `
+                -GitHubRepository $null `
+                -Tokens @()
+        }
+    )
+    Write-TestIndex -IndexPath $case.Index -Projects $maximumCandidates
+
+    $candidateStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $first = Invoke-TestRouter `
+        -Task 'completely unrelated candidate benchmark' `
+        -Case $case
+    $candidateStopwatch.Stop()
+
+    $repeatStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $second = Invoke-TestRouter `
+        -Task 'completely unrelated candidate benchmark' `
+        -Case $case
+    $repeatStopwatch.Stop()
+
+    Assert-Equal $first.status 'no_match' '4096 个 empty-token 候选应正常处理'
+    Assert-Equal `
+        (($first.candidates.name) -join ',') `
+        'project-0000,project-0000,project-0000' `
+        '4096 个候选应保持现有确定性排序'
+    Assert-Equal `
+        (($first.candidates.githubRepository) -join ',') `
+        'owner/first,owner/second,owner/third' `
+        'comparator 相等时应保持旧排序的输入顺序'
+    Assert-Equal `
+        (ConvertTo-Json -InputObject $first -Depth 10) `
+        (ConvertTo-Json -InputObject $second -Depth 10) `
+        '4096 个候选重复路由输出必须相同'
+    Assert-True `
+        -Condition ($candidateStopwatch.ElapsedMilliseconds -lt 30000) `
+        -Message "4096-candidate 路由耗时不应超过宽松的 30 秒上限；实际 $($candidateStopwatch.ElapsedMilliseconds) ms"
+    Assert-True `
+        -Condition ($repeatStopwatch.ElapsedMilliseconds -lt 30000) `
+        -Message "4096-candidate 重复路由耗时不应超过宽松的 30 秒上限；实际 $($repeatStopwatch.ElapsedMilliseconds) ms"
+    Write-Host (
+        "PASS 28/28：4096-candidate benchmark（首次 {0} ms；重复 {1} ms）" -f `
+            $candidateStopwatch.ElapsedMilliseconds,
+            $repeatStopwatch.ElapsedMilliseconds
+    )
+    $passed++
+
+    Write-Host "全部快速路由测试通过（$passed/28）。"
 }
 finally {
     if (Test-Path -LiteralPath $testRoot) {

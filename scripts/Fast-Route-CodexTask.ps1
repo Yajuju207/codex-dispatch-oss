@@ -148,17 +148,12 @@ function Get-FastRouterAuthorizedLocalPath {
         New-FastRouterError "Project Index projects[$ProjectNumber].localPath 无效。"
     }
 
-    $isWorkspaceRoot = [string]::Equals(
-        $comparisonRoot,
-        $comparisonCandidate,
-        [System.StringComparison]::OrdinalIgnoreCase
-    )
     $workspacePrefix = $comparisonRoot + [System.IO.Path]::DirectorySeparatorChar
     $isWithinWorkspace = $comparisonCandidate.StartsWith(
         $workspacePrefix,
         [System.StringComparison]::OrdinalIgnoreCase
     )
-    if (-not $isWorkspaceRoot -and -not $isWithinWorkspace) {
+    if (-not $isWithinWorkspace) {
         New-FastRouterError "Project Index projects[$ProjectNumber].localPath 超出 workspace.root。"
     }
 
@@ -312,21 +307,37 @@ function Sort-FastRouterCandidates {
         [object[]]$Candidates
     )
 
-    $sorted = [object[]]$Candidates.Clone()
-    for ($index = 1; $index -lt $sorted.Count; $index++) {
-        $current = $sorted[$index]
-        $cursor = $index - 1
-        while (
-            $cursor -ge 0 -and
-            (Compare-FastRouterCandidate -Left $current -Right $sorted[$cursor]) -lt 0
-        ) {
-            $sorted[$cursor + 1] = $sorted[$cursor]
-            $cursor--
-        }
-        $sorted[$cursor + 1] = $current
+    $sorted = New-Object 'System.Collections.Generic.List[object]'
+    for ($candidateIndex = 0; $candidateIndex -lt $Candidates.Count; $candidateIndex++) {
+        [void]$sorted.Add([pscustomobject]@{
+            Candidate = $Candidates[$candidateIndex]
+            OriginalIndex = [int]$candidateIndex
+        })
     }
 
-    return $sorted
+    $comparison = [System.Comparison[object]]{
+        param($left, $right)
+
+        $candidateComparison = Compare-FastRouterCandidate `
+            -Left $left.Candidate `
+            -Right $right.Candidate
+        if ($candidateComparison -ne 0) {
+            return $candidateComparison
+        }
+
+        if ([int]$left.OriginalIndex -lt [int]$right.OriginalIndex) {
+            return -1
+        }
+        if ([int]$left.OriginalIndex -gt [int]$right.OriginalIndex) {
+            return 1
+        }
+        return 0
+    }
+    $sorted.Sort($comparison)
+
+    foreach ($item in $sorted) {
+        Write-Output $item.Candidate
+    }
 }
 
 function Get-FastRouterIndexPath {
