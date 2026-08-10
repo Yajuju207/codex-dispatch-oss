@@ -228,7 +228,8 @@ function New-TestProject {
         [string]$LocalPath,
 
         [Parameter(Mandatory = $true)]
-        [string]$GitHubRepository
+        [AllowNull()]
+        [object]$GitHubRepository
     )
 
     return [pscustomobject][ordered]@{
@@ -509,7 +510,7 @@ public static class FakeCodex
     Assert-Equal $result.selectedProject.localPath $project.localPath '授权路径'
     Assert-Equal $result.confidence 'high' 'confidence'
     Assert-NoNewTempArtifacts -Before $before -Message '成功后 temp 必须清理'
-    Write-Host 'PASS 1/38：valid routed / reauthorization / success cleanup'
+    Write-Host 'PASS 1/45：valid routed / reauthorization / success cleanup'
     $passed++
 
     # 2. disabled 不读取缺失 Index，也不调用 Codex。
@@ -524,7 +525,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task '   ' -Case $case } `
         -ExpectedText 'Task 必须是非空字符串'
-    Write-Host 'PASS 2/38：disabled bypasses index and Codex'
+    Write-Host 'PASS 2/45：disabled bypasses index and Codex'
     $passed++
 
     # 3. enabled 必须是 JSON bool。
@@ -534,7 +535,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'routing.slow.enabled 必须是 JSON 布尔值'
-    Write-Host 'PASS 3/38：invalid enabled type'
+    Write-Host 'PASS 3/45：invalid enabled type'
     $passed++
 
     # 4. timeoutSeconds 必须是真正的 1..3600 整数。
@@ -546,7 +547,7 @@ public static class FakeCodex
             -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
             -ExpectedText 'routing.slow.timeoutSeconds 必须是 1 到 3600 之间的整数'
     }
-    Write-Host 'PASS 4/38：invalid timeout values'
+    Write-Host 'PASS 4/45：invalid timeout values'
     $passed++
 
     # 5. Router sandbox 不能扩大为 workspace-write。
@@ -556,7 +557,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '只允许 codex.routerSandbox=read-only'
-    Write-Host 'PASS 5/38：routerSandbox enforcement'
+    Write-Host 'PASS 5/45：routerSandbox enforcement'
     $passed++
 
     # 6. approval policy 必须 never。
@@ -566,7 +567,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '只允许 codex.approvalPolicy=never'
-    Write-Host 'PASS 6/38：approvalPolicy enforcement'
+    Write-Host 'PASS 6/45：approvalPolicy enforcement'
     $passed++
 
     # 7. codex.command 空值与无法解析都拒绝。
@@ -581,7 +582,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '无法解析 codex.command'
-    Write-Host 'PASS 7/38：empty/unresolved codex.command'
+    Write-Host 'PASS 7/45：empty/unresolved codex.command'
     $passed++
 
     # 8. malformed Project Index 是系统错误。
@@ -593,7 +594,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'Project Index 不是有效 JSON'
-    Write-Host 'PASS 8/38：malformed index'
+    Write-Host 'PASS 8/45：malformed index'
     $passed++
 
     # 9. 只接受 Project Index v1。
@@ -602,7 +603,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '不支持 Project Index version=2'
-    Write-Host 'PASS 9/38：unsupported index version'
+    Write-Host 'PASS 9/45：unsupported index version'
     $passed++
 
     # 10. 合法零候选直接 no_match，不解析 command、不启动进程。
@@ -611,7 +612,7 @@ public static class FakeCodex
     $result = Invoke-TestRouter -Task 'anything' -Case $case
     Assert-Equal $result.status 'no_match' '零候选 no_match'
     Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($result.reason)) -Message '零候选 reason 非空'
-    Write-Host 'PASS 10/38：empty candidates without Codex'
+    Write-Host 'PASS 10/45：empty candidates without Codex'
     $passed++
 
     # 11. candidate.localPath 必须绝对。
@@ -622,7 +623,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'localPath 必须是绝对路径'
-    Write-Host 'PASS 11/38：relative candidate rejected'
+    Write-Host 'PASS 11/45：relative candidate rejected'
     $passed++
 
     # 12. workspace.root 自身不是 candidate。
@@ -633,7 +634,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '必须严格位于 workspace.root 之下'
-    Write-Host 'PASS 12/38：workspace.root candidate rejected'
+    Write-Host 'PASS 12/45：workspace.root candidate rejected'
     $passed++
 
     # 13. 相邻字符串前缀不能绕过 workspace 边界。
@@ -646,7 +647,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '必须严格位于 workspace.root 之下'
-    Write-Host 'PASS 13/38：adjacent prefix rejected'
+    Write-Host 'PASS 13/45：adjacent prefix rejected'
     $passed++
 
     # 14. nested project 保持合法。
@@ -659,7 +660,7 @@ public static class FakeCodex
         -Confidence 'medium' -Reason '嵌套候选唯一匹配。')
     $result = Invoke-TestRouter -Task 'nested feature' -Case $case
     Assert-Equal $result.selectedProject.localPath $project.localPath 'nested candidate path'
-    Write-Host 'PASS 14/38：nested candidate allowed'
+    Write-Host 'PASS 14/45：nested candidate allowed'
     $passed++
 
     # 15. stale/missing candidate directory 被拒绝。
@@ -671,7 +672,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'localPath 不存在或不是目录'
-    Write-Host 'PASS 15/38：stale candidate rejected'
+    Write-Host 'PASS 15/45：stale candidate rejected'
     $passed++
 
     # 16. candidate path chain 中的 junction/reparse 被拒绝。
@@ -686,7 +687,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '包含不安全 reparse point'
-    Write-Host 'PASS 16/38：unsafe candidate reparse rejected'
+    Write-Host 'PASS 16/45：unsafe candidate reparse rejected'
     $passed++
 
     # 17. Project Index 文件 symlink 在环境支持时被拒绝。
@@ -707,7 +708,7 @@ public static class FakeCodex
             -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
             -ExpectedText 'Project Index 不能是符号链接'
     }
-    Write-Host 'PASS 17/38：index reparse safety'
+    Write-Host 'PASS 17/45：index reparse safety'
     $passed++
 
     # 18. 模型返回未知 localPath 必须拒绝。
@@ -723,7 +724,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'Rejected Codex route'
-    Write-Host 'PASS 18/38：unknown model path rejected'
+    Write-Host 'PASS 18/45：unknown model path rejected'
     $passed++
 
     # 19. 模型创建的 workspace 外路径没有授权意义。
@@ -737,7 +738,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'Rejected Codex route'
-    Write-Host 'PASS 19/38：model-created outside path rejected'
+    Write-Host 'PASS 19/45：model-created outside path rejected'
     $passed++
 
     # 20. project/localPath 必须来自同一 candidate。
@@ -753,7 +754,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'project 与 localPath 不属于同一候选项目'
-    Write-Host 'PASS 20/38：project/path mismatch rejected'
+    Write-Host 'PASS 20/45：project/path mismatch rejected'
     $passed++
 
     # 21. routed confidence 必须属于固定 enum。
@@ -763,7 +764,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'confidence 必须是 high、medium 或 low'
-    Write-Host 'PASS 21/38：invalid routed confidence'
+    Write-Host 'PASS 21/45：invalid routed confidence'
     $passed++
 
     # 22. routed reason 必须非空。
@@ -773,7 +774,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'routed 结果 reason 必须非空'
-    Write-Host 'PASS 22/38：empty routed reason rejected'
+    Write-Host 'PASS 22/45：empty routed reason rejected'
     $passed++
 
     # 23. 合法 needs_input 只返回项目归属问题和候选 repositories。
@@ -784,7 +785,7 @@ public static class FakeCodex
     Assert-Equal $result.status 'needs_input' 'needs_input 状态'
     Assert-Equal $result.options.Count 2 'needs_input options 数量'
     Assert-True -Condition ($null -eq $result.selectedProject) -Message 'needs_input 无 selectedProject'
-    Write-Host 'PASS 23/38：valid needs_input'
+    Write-Host 'PASS 23/45：valid needs_input'
     $passed++
 
     # 24. needs_input question 必须非空。
@@ -793,7 +794,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'needs_input 结果 question 必须非空'
-    Write-Host 'PASS 24/38：empty needs_input question rejected'
+    Write-Host 'PASS 24/45：empty needs_input question rejected'
     $passed++
 
     # 25. needs_input 至少两个 distinct options。
@@ -802,7 +803,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '至少两个不同候选项目'
-    Write-Host 'PASS 25/38：fewer than two needs_input options rejected'
+    Write-Host 'PASS 25/45：fewer than two needs_input options rejected'
     $passed++
 
     # 26. options 去重后仍保留合法确定顺序。
@@ -811,7 +812,7 @@ public static class FakeCodex
         -Options @('owner/first', 'owner/first', 'owner/second'))
     $result = Invoke-TestRouter -Task 'anything' -Case $case
     Assert-Equal (($result.options) -join ',') 'owner/first,owner/second' 'options 去重'
-    Write-Host 'PASS 26/38：duplicate options deduplicated'
+    Write-Host 'PASS 26/45：duplicate options deduplicated'
     $passed++
 
     # 27. unknown free-text option 被拒绝。
@@ -821,7 +822,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'needs_input 包含未知候选'
-    Write-Host 'PASS 27/38：unknown needs_input option rejected'
+    Write-Host 'PASS 27/45：unknown needs_input option rejected'
     $passed++
 
     # 28. 合法 no_match 需要非空中文 reason，且成功后 temp 清理。
@@ -832,7 +833,7 @@ public static class FakeCodex
     Assert-Equal $result.status 'no_match' '合法 no_match'
     Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($result.reason)) -Message 'no_match reason'
     Assert-NoNewTempArtifacts -Before $before -Message 'no_match 后 temp 必须清理'
-    Write-Host 'PASS 28/38：valid no_match / success cleanup'
+    Write-Host 'PASS 28/45：valid no_match / success cleanup'
     $passed++
 
     # 29. no_match reason 不能为空。
@@ -840,7 +841,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'no_match 结果 reason 必须非空'
-    Write-Host 'PASS 29/38：empty no_match reason rejected'
+    Write-Host 'PASS 29/45：empty no_match reason rejected'
     $passed++
 
     # 30. malformed JSON 不得降级为 no_match。
@@ -848,7 +849,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'Codex CLI 返回无效 JSON'
-    Write-Host 'PASS 30/38：malformed model JSON'
+    Write-Host 'PASS 30/45：malformed model JSON'
     $passed++
 
     # 31. JSON array 不是合法模型结果 object。
@@ -856,7 +857,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '结果必须是 JSON object'
-    Write-Host 'PASS 31/38：model JSON array rejected'
+    Write-Host 'PASS 31/45：model JSON array rejected'
     $passed++
 
     # 32. empty stdout 是系统错误。
@@ -864,7 +865,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText 'Codex CLI 返回空 stdout'
-    Write-Host 'PASS 32/38：empty stdout rejected'
+    Write-Host 'PASS 32/45：empty stdout rejected'
     $passed++
 
     # 33. unsupported status 被拒绝。
@@ -873,7 +874,7 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '返回不支持的 status'
-    Write-Host 'PASS 33/38：unsupported status rejected'
+    Write-Host 'PASS 33/45：unsupported status rejected'
     $passed++
 
     # 34. non-zero exit 保留 stderr 诊断，并清理 temp。
@@ -883,7 +884,7 @@ public static class FakeCodex
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '退出码为 7：fake diagnostic marker'
     Assert-NoNewTempArtifacts -Before $before -Message 'process failure 后 temp 必须清理'
-    Write-Host 'PASS 34/38：non-zero exit / stderr / failure cleanup'
+    Write-Host 'PASS 34/45：non-zero exit / stderr / failure cleanup'
     $passed++
 
     # 35. timeoutSeconds 真正终止 Router process，并清理 temp。
@@ -911,7 +912,7 @@ public static class FakeCodex
         -Condition ($null -eq (Get-Process -Id $fakePid -ErrorAction SilentlyContinue)) `
         -Message 'timeout 后 fake Router process 必须终止'
     Assert-NoNewTempArtifacts -Before $before -Message 'timeout 后 temp 必须清理'
-    Write-Host 'PASS 35/38：timeout / process termination / cleanup'
+    Write-Host 'PASS 35/45：timeout / process termination / cleanup'
     $passed++
 
     # 36. .cmd wrapper 与所有安全 CLI 参数、cwd、schema 都有效。
@@ -962,7 +963,7 @@ public static class FakeCodex
     Assert-Equal $schema.type 'object' 'schema 顶层 object'
     Assert-Equal $schema.additionalProperties $false 'schema additionalProperties=false'
     Assert-Equal $schema.required.Count 7 'schema required fields'
-    Write-Host 'PASS 36/38：cmd wrapper / CLI safety / cwd / output schema'
+    Write-Host 'PASS 36/45：cmd wrapper / CLI safety / cwd / output schema'
     $passed++
 
     # 37. Task 与最小 candidates 只作为 JSON data，prompt 含双重 untrusted 纪律。
@@ -984,7 +985,7 @@ public static class FakeCodex
     Assert-True -Condition $prompt.Contains('"githubRepository":"owner/example-project"') -Message 'candidate repository'
     Assert-True -Condition (-not $prompt.Contains('trackedPathCount')) -Message '不发送 tracked count'
     Assert-True -Condition (-not $prompt.Contains('"tokens"')) -Message '不发送 tokens'
-    Write-Host 'PASS 37/38：prompt injection boundary / JSON data / minimal candidates / Chinese task'
+    Write-Host 'PASS 37/45：prompt injection boundary / JSON data / minimal candidates / Chinese task'
     $passed++
 
     # 38. 重复调用的授权输出确定，缺失/额外字段同样被拒绝。
@@ -1007,10 +1008,159 @@ public static class FakeCodex
     Assert-SlowRouterError `
         -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
         -ExpectedText '包含未知字段'
-    Write-Host 'PASS 38/38：deterministic repeat / required fields / no extra fields'
+    Write-Host 'PASS 38/45：deterministic repeat / required fields / no extra fields'
     $passed++
 
-    Write-Host "全部慢速路由测试通过（$passed/38）。"
+    # 39. githubRepository=null 是合法 Index entry，但不会进入候选集。
+    $case = New-TestCase -Parent $testRoot -Name 'null-repository-with-valid' -CodexCommand $fakeExe
+    $nullPath = Join-Path $case.Workspace 'local-only'
+    [void](New-Item -ItemType Directory -Path $nullPath)
+    $localOnly = New-TestProject `
+        -Name 'local-only' -LocalPath $nullPath -GitHubRepository $null
+    $projectB = New-TestProjectDirectory `
+        -Case $case -RelativePath 'project-b' -Name 'project-b' -Repository 'owner/project-b'
+    Write-TestIndex -IndexPath $case.Index -Projects @($localOnly, $projectB)
+    $stdinCapture = Join-Path $case.Root 'stdin.txt'
+    Set-FakeCodexBehavior `
+        -StandardOutput (New-ModelJson `
+            -Status 'routed' -Project 'owner/project-b' -LocalPath $projectB.localPath `
+            -Confidence 'high' -Reason '唯一可调度候选。') `
+        -InputCapture $stdinCapture
+    $result = Invoke-TestRouter -Task 'route project b' -Case $case
+    Assert-Equal $result.status 'routed' 'null repository 不阻塞合法候选'
+    Assert-Equal $result.selectedProject.githubRepository 'owner/project-b' '路由到 project B'
+    $prompt = [System.IO.File]::ReadAllText($stdinCapture)
+    Assert-True -Condition (-not $prompt.Contains('local-only')) -Message 'null repository 不发送给模型'
+    Write-Host 'PASS 39/45：null repository skipped while valid candidate routes'
+    $passed++
+
+    # 40. 全部 repository=null 时直接 no_match，不解析 command，也不启动 fake Codex。
+    $case = New-TestCase `
+        -Parent $testRoot -Name 'all-null-repositories-unresolved-command' `
+        -CodexCommand 'not-a-real-codex-command'
+    $localOnly = New-TestProject `
+        -Name 'local-only' -LocalPath (Join-Path $case.Workspace 'local-only') `
+        -GitHubRepository $null
+    Write-TestIndex -IndexPath $case.Index -Projects @($localOnly)
+    $result = Invoke-TestRouter -Task 'anything' -Case $case
+    Assert-Equal $result.status 'no_match' '全 null repository no_match'
+    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($result.reason)) -Message '全 null reason 非空'
+
+    $case = New-TestCase `
+        -Parent $testRoot -Name 'all-null-repositories-no-process' -CodexCommand $fakeExe
+    $localOnly = New-TestProject `
+        -Name 'local-only' -LocalPath (Join-Path $case.Workspace 'local-only') `
+        -GitHubRepository $null
+    Write-TestIndex -IndexPath $case.Index -Projects @($localOnly)
+    $capture = Join-Path $case.Root 'called.txt'
+    Set-FakeCodexBehavior -ArgumentsCapture $capture
+    $result = Invoke-TestRouter -Task 'anything' -Case $case
+    Assert-Equal $result.status 'no_match' '全 null repository 不启动进程'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $capture)) -Message '全 null repository 不调用 Codex'
+    Write-Host 'PASS 40/45：all null repositories return no_match without command/process'
+    $passed++
+
+    # 41. null repository 必须在 stale localPath validation 前过滤。
+    $case = New-TestCase -Parent $testRoot -Name 'stale-null-repository' -CodexCommand $fakeExe
+    $staleLocalOnly = New-TestProject `
+        -Name 'stale-local-only' `
+        -LocalPath (Join-Path $case.Workspace 'does-not-exist') `
+        -GitHubRepository $null
+    $projectB = New-TestProjectDirectory `
+        -Case $case -RelativePath 'project-b' -Name 'project-b' -Repository 'owner/project-b'
+    Write-TestIndex -IndexPath $case.Index -Projects @($staleLocalOnly, $projectB)
+    Set-FakeCodexBehavior -StandardOutput (New-ModelJson `
+        -Status 'routed' -Project 'owner/project-b' -LocalPath $projectB.localPath `
+        -Confidence 'high' -Reason '唯一可调度候选。')
+    $result = Invoke-TestRouter -Task 'route project b' -Case $case
+    Assert-Equal $result.selectedProject.githubRepository 'owner/project-b' 'stale null entry 被提前过滤'
+    Write-Host 'PASS 41/45：stale null-repository path skipped before validation'
+    $passed++
+
+    # 42. githubRepository 字段缺失仍是 malformed Index error。
+    $case = New-TestCase -Parent $testRoot -Name 'missing-repository-field' -CodexCommand $fakeExe
+    $missingRepository = [pscustomobject][ordered]@{
+        name = 'missing-repository'
+        localPath = (Join-Path $case.Workspace 'missing-repository')
+        tokens = [object[]]@('identity')
+        trackedPathCount = 1
+        indexedTrackedPathCount = 1
+        truncated = $false
+    }
+    Write-TestIndex -IndexPath $case.Index -Projects @($missingRepository)
+    Assert-SlowRouterError `
+        -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
+        -ExpectedText '缺少必需字段：githubRepository'
+    Write-Host 'PASS 42/45：missing githubRepository field rejected'
+    $passed++
+
+    # 43. 非 null repository 仍必须是合法的非空 owner/repository 字符串。
+    $invalidRepositories = @(
+        [pscustomobject]@{ Label = 'empty'; Value = '' },
+        [pscustomobject]@{ Label = 'whitespace'; Value = '   ' },
+        [pscustomobject]@{ Label = 'array'; Value = [object[]]@('owner/one', 'owner/two') },
+        [pscustomobject]@{ Label = 'number'; Value = 42 },
+        [pscustomobject]@{ Label = 'bool'; Value = $true },
+        [pscustomobject]@{ Label = 'malformed'; Value = 'not-a-repository' }
+    )
+    foreach ($invalidRepository in $invalidRepositories) {
+        $case = New-TestCase `
+            -Parent $testRoot `
+            -Name ('invalid-repository-' + $invalidRepository.Label) `
+            -CodexCommand $fakeExe
+        $invalidProject = [pscustomobject][ordered]@{
+            name = 'invalid-repository'
+            localPath = (Join-Path $case.Workspace 'invalid-repository')
+            githubRepository = $invalidRepository.Value
+            tokens = [object[]]@('identity')
+            trackedPathCount = 1
+            indexedTrackedPathCount = 1
+            truncated = $false
+        }
+        Write-TestIndex -IndexPath $case.Index -Projects @($invalidProject)
+        Assert-SlowRouterError `
+            -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
+            -ExpectedText 'githubRepository 必须'
+    }
+    Write-Host 'PASS 43/45：invalid non-null githubRepository values rejected'
+    $passed++
+
+    # 44. null repository 不得掩盖缺失 name 的 malformed entry。
+    $case = New-TestCase -Parent $testRoot -Name 'null-repository-missing-name' -CodexCommand $fakeExe
+    $missingName = [pscustomobject][ordered]@{
+        localPath = (Join-Path $case.Workspace 'local-only')
+        githubRepository = $null
+        tokens = [object[]]@('identity')
+        trackedPathCount = 1
+        indexedTrackedPathCount = 1
+        truncated = $false
+    }
+    Write-TestIndex -IndexPath $case.Index -Projects @($missingName)
+    Assert-SlowRouterError `
+        -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
+        -ExpectedText '缺少必需字段：name'
+    Write-Host 'PASS 44/45：null repository does not hide missing name'
+    $passed++
+
+    # 45. null repository 不得掩盖非字符串 localPath 的 malformed entry。
+    $case = New-TestCase -Parent $testRoot -Name 'null-repository-invalid-path' -CodexCommand $fakeExe
+    $invalidPath = [pscustomobject][ordered]@{
+        name = 'local-only'
+        localPath = [object[]]@('not', 'a', 'string')
+        githubRepository = $null
+        tokens = [object[]]@('identity')
+        trackedPathCount = 1
+        indexedTrackedPathCount = 1
+        truncated = $false
+    }
+    Write-TestIndex -IndexPath $case.Index -Projects @($invalidPath)
+    Assert-SlowRouterError `
+        -Action { Invoke-TestRouter -Task 'anything' -Case $case } `
+        -ExpectedText 'localPath 必须是非空字符串'
+    Write-Host 'PASS 45/45：null repository does not hide invalid localPath type'
+    $passed++
+
+    Write-Host "全部慢速路由测试通过（$passed/45）。"
 }
 finally {
     foreach ($name in $environmentNames) {

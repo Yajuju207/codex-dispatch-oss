@@ -275,23 +275,25 @@ function ConvertTo-SlowRouterCandidate {
     $name = ([string]$nameValue).Trim()
 
     $pathValue = Get-SlowRouterProperty -Object $Project -Name 'localPath' -Context $context
-    if ($pathValue -isnot [string]) {
+    if (
+        $pathValue -isnot [string] -or
+        [string]::IsNullOrWhiteSpace([string]$pathValue)
+    ) {
         New-SlowRouterError "$context.localPath 必须是非空字符串。"
     }
-    $localPath = Get-SlowRouterSafeCandidatePath `
-        -Path ([string]$pathValue) `
-        -WorkspaceRoot $WorkspaceRoot `
-        -Context $context
 
     $repositoryValue = Get-SlowRouterProperty `
         -Object $Project `
         -Name 'githubRepository' `
         -Context $context
+    if ($null -eq $repositoryValue) {
+        return $null
+    }
     if (
         $repositoryValue -isnot [string] -or
         [string]::IsNullOrWhiteSpace([string]$repositoryValue)
     ) {
-        New-SlowRouterError "$context.githubRepository 必须是非空 owner/repository 字符串。"
+        New-SlowRouterError "$context.githubRepository 必须是非空 owner/repository 字符串或 null。"
     }
     $repository = ([string]$repositoryValue).Trim()
     $repositoryMatch = [regex]::Match(
@@ -305,6 +307,11 @@ function ConvertTo-SlowRouterCandidate {
     ) {
         New-SlowRouterError "$context.githubRepository 必须使用 owner/repository 格式。"
     }
+
+    $localPath = Get-SlowRouterSafeCandidatePath `
+        -Path ([string]$pathValue) `
+        -WorkspaceRoot $WorkspaceRoot `
+        -Context $context
 
     return [pscustomobject][ordered]@{
         Name = $name
@@ -971,12 +978,13 @@ if ($projectsValue -isnot [System.Array]) {
 
 $candidates = New-Object 'System.Collections.Generic.List[object]'
 for ($projectIndex = 0; $projectIndex -lt $projectsValue.Count; $projectIndex++) {
-    [void]$candidates.Add(
-        (ConvertTo-SlowRouterCandidate `
-            -Project $projectsValue[$projectIndex] `
-            -WorkspaceRoot $workspaceRoot `
-            -ProjectNumber $projectIndex)
-    )
+    $candidate = ConvertTo-SlowRouterCandidate `
+        -Project $projectsValue[$projectIndex] `
+        -WorkspaceRoot $workspaceRoot `
+        -ProjectNumber $projectIndex
+    if ($null -ne $candidate) {
+        [void]$candidates.Add($candidate)
+    }
 }
 
 if ($candidates.Count -eq 0) {

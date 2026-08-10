@@ -54,6 +54,8 @@ localPath
 githubRepository
 ```
 
+`Project Index v1` 允许 `githubRepository=null`。这类本地项目是合法 Index entry，但不会进入 Slow Router dispatch candidate set；只有合法的非空 `owner/repository` identity 才会成为候选。
+
 发送给 Codex 的候选 JSON 也只包含这三个身份字段，不发送完整 Index 或 tracked-path 统计。
 
 Index 必须存在、是普通文件、不是 reparse point，并且 JSON 顶层必须是 `version=1` 且包含 `projects` 数组。配置或 Index 损坏会抛错，不会降级为正常 `no_match`。
