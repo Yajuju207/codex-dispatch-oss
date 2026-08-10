@@ -37,6 +37,14 @@ Fast Router 只接受 `Project Index v1`。每个项目必须包含：
 - `indexedTrackedPathCount`；
 - `truncated`。
 
+Fast Router 同时验证 Project Index v1 的生成上限：
+
+- 每个项目最多 4096 个 `tokens`；
+- 每个规范化 token 的长度必须为 2–128 个字符（忽略 separator）；
+- `indexedTrackedPathCount` 最多为 5000，且不能大于 `trackedPathCount`。
+
+每个 `localPath` 必须是绝对路径。Fast Router 使用 `GetFullPath` 做纯词法规范化，并要求结果等于配置的 `workspace.root` 或位于其目录分隔符边界之下；相邻前缀（例如根目录 `D:\projects` 与候选 `D:\projects2\x`）不属于 workspace。
+
 缺失、损坏、不支持的版本或不符合 schema 的索引会抛出统一错误，不会静默返回 `no_match`。
 
 ## 规范化
@@ -176,3 +184,5 @@ Fast Router：
 - 不跟随作为 reparse point 的 Project Index。
 
 它只读取 `config.local.json` 和 `project-index.json`，并把确定性 PowerShell 对象写到标准输出。
+
+Fast Router 的输出只是路由建议，不是最终路径授权。Worker 在执行任何项目操作前仍必须依据当时的 `workspace.root` 重新校验 workspace 边界。

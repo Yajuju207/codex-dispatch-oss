@@ -16,6 +16,11 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
+$MaxTokensPerProject = 4096
+$MaxIndexedTrackedPathsPerProject = 5000
+$MinTokenLength = 2
+$MaxTokenLength = 128
+
 function New-FastRouterError {
     param(
         [Parameter(Mandatory = $true)]
@@ -117,6 +122,49 @@ function ConvertTo-FastRouterNormalizedText {
     return ([regex]::Replace($normalized, '\s+', ' ')).Trim()
 }
 
+function Get-FastRouterAuthorizedLocalPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WorkspaceRoot,
+
+        [Parameter(Mandatory = $true)]
+        [int]$ProjectNumber
+    )
+
+    if (-not [System.IO.Path]::IsPathRooted($Path)) {
+        New-FastRouterError "Project Index projects[$ProjectNumber].localPath 必须是绝对路径。"
+    }
+
+    try {
+        $fullRoot = [System.IO.Path]::GetFullPath($WorkspaceRoot)
+        $fullCandidate = [System.IO.Path]::GetFullPath($Path)
+        $comparisonRoot = $fullRoot.TrimEnd('\', '/')
+        $comparisonCandidate = $fullCandidate.TrimEnd('\', '/')
+    }
+    catch {
+        New-FastRouterError "Project Index projects[$ProjectNumber].localPath 无效。"
+    }
+
+    $isWorkspaceRoot = [string]::Equals(
+        $comparisonRoot,
+        $comparisonCandidate,
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+    $workspacePrefix = $comparisonRoot + [System.IO.Path]::DirectorySeparatorChar
+    $isWithinWorkspace = $comparisonCandidate.StartsWith(
+        $workspacePrefix,
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+    if (-not $isWorkspaceRoot -and -not $isWithinWorkspace) {
+        New-FastRouterError "Project Index projects[$ProjectNumber].localPath 超出 workspace.root。"
+    }
+
+    return $fullCandidate
+}
+
 function Test-FastRouterSignalMatch {
     param(
         [Parameter(Mandatory = $true)]
@@ -212,21 +260,19 @@ function Sort-FastRouterTokenRecords {
         [object[]]$Records
     )
 
-    $sorted = [object[]]$Records.Clone()
-    for ($index = 1; $index -lt $sorted.Count; $index++) {
-        $current = $sorted[$index]
-        $cursor = $index - 1
-        while (
-            $cursor -ge 0 -and
-            (Compare-FastRouterTokenRecord -Left $current -Right $sorted[$cursor]) -lt 0
-        ) {
-            $sorted[$cursor + 1] = $sorted[$cursor]
-            $cursor--
-        }
-        $sorted[$cursor + 1] = $current
+    $sorted = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($record in $Records) {
+        [void]$sorted.Add($record)
     }
 
-    return $sorted
+    $comparison = [System.Comparison[object]]{
+        param($left, $right)
+
+        return Compare-FastRouterTokenRecord -Left $left -Right $right
+    }
+    $sorted.Sort($comparison)
+
+    Write-Output -NoEnumerate ([object[]]$sorted.ToArray())
 }
 
 function Compare-FastRouterCandidate {
@@ -345,6 +391,9 @@ function ConvertTo-FastRouterProject {
         [object]$Project,
 
         [Parameter(Mandatory = $true)]
+        [string]$WorkspaceRoot,
+
+        [Parameter(Mandatory = $true)]
         [int]$ProjectNumber
     )
 
@@ -359,6 +408,10 @@ function ConvertTo-FastRouterProject {
     $localPath = Get-FastRouterProjectString `
         -Project $Project `
         -Name 'localPath' `
+        -ProjectNumber $ProjectNumber
+    $localPath = Get-FastRouterAuthorizedLocalPath `
+        -Path $localPath `
+        -WorkspaceRoot $WorkspaceRoot `
         -ProjectNumber $ProjectNumber
 
     $repositoryValue = Get-FastRouterProperty `
@@ -388,6 +441,9 @@ function ConvertTo-FastRouterProject {
     if ($tokensValue -isnot [System.Array]) {
         New-FastRouterError "Project Index projects[$ProjectNumber].tokens 必须是 JSON 数组。"
     }
+    if ($tokensValue.Count -gt $MaxTokensPerProject) {
+        New-FastRouterError "Project Index projects[$ProjectNumber].tokens 不能超过 $MaxTokensPerProject 个。"
+    }
 
     $tokenValues = [System.Collections.Generic.Dictionary[string,string]]::new(
         [System.StringComparer]::Ordinal
@@ -400,6 +456,14 @@ function ConvertTo-FastRouterProject {
         $normalizedToken = ConvertTo-FastRouterNormalizedText -Value $tokenValue
         if ([string]::IsNullOrWhiteSpace($normalizedToken)) {
             New-FastRouterError "Project Index projects[$ProjectNumber].tokens 包含无法规范化的 token。"
+        }
+
+        $normalizedTokenLength = $normalizedToken.Replace(' ', '').Length
+        if (
+            $normalizedTokenLength -lt $MinTokenLength -or
+            $normalizedTokenLength -gt $MaxTokenLength
+        ) {
+            New-FastRouterError "Project Index projects[$ProjectNumber].tokens 的规范长度必须是 $MinTokenLength 到 $MaxTokenLength 个字符。"
         }
 
         if (-not $tokenValues.ContainsKey($normalizedToken)) {
@@ -426,6 +490,9 @@ function ConvertTo-FastRouterProject {
             -Name 'indexedTrackedPathCount' `
             -Context "Project Index projects[$ProjectNumber]") `
         -Name "Project Index projects[$ProjectNumber].indexedTrackedPathCount"
+    if ($indexedTrackedPathCount -gt $MaxIndexedTrackedPathsPerProject) {
+        New-FastRouterError "Project Index projects[$ProjectNumber].indexedTrackedPathCount 不能超过 $MaxIndexedTrackedPathsPerProject。"
+    }
     if ($indexedTrackedPathCount -gt $trackedPathCount) {
         New-FastRouterError "Project Index projects[$ProjectNumber] 的 indexedTrackedPathCount 不能大于 trackedPathCount。"
     }
@@ -591,10 +658,12 @@ if ($projectsValue -isnot [System.Array]) {
 }
 
 $projects = New-Object 'System.Collections.Generic.List[object]'
+$workspaceRoot = [System.IO.Path]::GetFullPath([string]$config.workspace.root)
 for ($projectIndex = 0; $projectIndex -lt $projectsValue.Count; $projectIndex++) {
     [void]$projects.Add(
         (ConvertTo-FastRouterProject `
             -Project $projectsValue[$projectIndex] `
+            -WorkspaceRoot $workspaceRoot `
             -ProjectNumber $projectIndex)
     )
 }
