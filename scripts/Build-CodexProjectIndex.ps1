@@ -202,6 +202,7 @@ function Invoke-CodexDispatchIndexGit {
 function Add-CodexDispatchIndexToken {
     param(
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [System.Collections.Generic.HashSet[string]]$Set,
 
         [Parameter()]
@@ -230,6 +231,7 @@ function Add-CodexDispatchIndexToken {
 function Add-CodexDispatchIndexIdentityTokens {
     param(
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [System.Collections.Generic.HashSet[string]]$Set,
 
         [Parameter(Mandatory = $true)]
@@ -251,6 +253,7 @@ function Add-CodexDispatchIndexIdentityTokens {
 function Add-CodexDispatchIndexTrackedPathTokens {
     param(
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [System.Collections.Generic.HashSet[string]]$Set,
 
         [Parameter(Mandatory = $true)]
@@ -444,7 +447,7 @@ foreach ($project in $validProjects) {
 
 $document = [pscustomobject][ordered]@{
     version = 1
-    projects = [object[]]@($indexedProjects)
+    projects = [object[]]$indexedProjects.ToArray()
 }
 
 try {
