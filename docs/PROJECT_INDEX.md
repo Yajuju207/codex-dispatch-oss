@@ -72,11 +72,11 @@ project-index.json
 
 ## token 来源
 
-v0.1 的 token 只来自：
+v0.1 的 token 全部规范化为小写，只来自：
 
 1. 项目目录名；
 2. GitHub `owner/repository` 与 repository 名；
-3. `git ls-files` 返回的 tracked path 的路径段、文件名和不带扩展名的文件名。
+3. `git -c core.quotepath=false ls-files` 返回的 tracked path 的路径段、文件名和不带扩展名的文件名。
 
 例如 tracked path：
 
@@ -84,13 +84,13 @@ v0.1 的 token 只来自：
 src/Relics/EternalWaiting.cs
 ```
 
-可以贡献类似：
+可以贡献：
 
 ```text
 src
-Relics
-EternalWaiting.cs
-EternalWaiting
+relics
+eternalwaiting.cs
+eternalwaiting
 ```
 
 构建器只读取 Git 返回的**路径字符串**，不会打开 `EternalWaiting.cs`。
@@ -99,13 +99,13 @@ EternalWaiting
 
 为了避免大型 monorepo 把索引无限放大，v0.1 使用固定安全上限：
 
-- 每个项目最多读取 5000 条 tracked path 用于索引；
+- 每个项目最多使用排序后的前 5000 条 tracked path 构建 token；
 - 每个项目最多保留 4096 个唯一 token；
 - token 长度为 2–128 个字符；
 - token 比较与去重大小写不敏感；
 - 输出排序稳定。
 
-超过 tracked path 上限时，`truncated=true`。项目仍然可路由，但 Fast Router 应把“缺少匹配 token”理解为可能需要 Slow Router，而不是认定项目不存在。
+超过 tracked path 或 token 上限时，`truncated=true`。项目仍然可路由，但 Fast Router 应把“缺少匹配 token”理解为可能需要 Slow Router，而不是认定项目不存在。
 
 ## 隐私与安全
 
@@ -113,7 +113,7 @@ Project Index 是 LOCAL 层数据，不应提交到公开仓库或复制到 Issu
 
 构建器：
 
-- 仅执行 `git rev-parse --show-toplevel` 与 `git ls-files -z`；
+- 仅执行 `git rev-parse --show-toplevel` 与 `git -c core.quotepath=false ls-files`；
 - 使用 `--no-optional-locks`；
 - 不执行 fetch、pull、push、status、diff 或任何网络操作；
 - 不遍历 `.git`；
