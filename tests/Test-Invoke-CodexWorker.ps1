@@ -118,6 +118,9 @@ function Write-TestConfiguration {
         [Parameter(Mandatory = $true)]
         [string]$WorkspaceRoot,
 
+        [Parameter(Mandatory = $true)]
+        [string]$StateDirectory,
+
         [Parameter()]
         [AllowEmptyString()]
         [string]$CodexCommand,
@@ -143,7 +146,7 @@ function Write-TestConfiguration {
             scanDepth = 2
             allowReparsePoints = $false
         }
-        runtime = [ordered]@{ stateDirectory = 'unused-by-worker-v0.1' }
+        runtime = [ordered]@{ stateDirectory = $StateDirectory }
         controlPlane = [ordered]@{
             provider = 'github'
             repository = 'owner/control-plane'
@@ -278,12 +281,15 @@ function New-TestCase {
 
     $root = Join-Path $Parent $Name
     $workspace = Join-Path $root 'workspace'
+    $stateDirectory = Join-Path $root 'runtime-state'
     [void](New-Item -ItemType Directory -Path $workspace -Force)
+    [void](New-Item -ItemType Directory -Path $stateDirectory -Force)
     $config = Join-Path $root 'config.local.json'
     $index = Join-Path $root 'project-index.json'
     Write-TestConfiguration `
         -Path $config `
         -WorkspaceRoot $workspace `
+        -StateDirectory $stateDirectory `
         -CodexCommand $CodexCommand `
         -WorkerSandbox $WorkerSandbox `
         -ApprovalPolicy $ApprovalPolicy `
