@@ -537,34 +537,65 @@ function Invoke-SlowRouterProcess {
     $utf8 = [System.Text.UTF8Encoding]::new($false)
     $startInfo.StandardOutputEncoding = $utf8
     $startInfo.StandardErrorEncoding = $utf8
+    $standardInputBytes = $utf8.GetBytes($StandardInput)
+    $timeoutMilliseconds = [int]($TimeoutSeconds * 1000)
 
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
+    $processStarted = $false
+    $standardInputClosed = $false
     try {
         try {
             [void]$process.Start()
+            $processStarted = $true
         }
         catch {
             New-SlowRouterError "无法启动 Codex Router process：$($_.Exception.Message)"
         }
 
+        $timeoutStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
-        try {
-            $standardInputBytes = $utf8.GetBytes($StandardInput)
-            $process.StandardInput.BaseStream.Write(
-                $standardInputBytes,
-                0,
-                $standardInputBytes.Length
-            )
-            $process.StandardInput.BaseStream.Flush()
-        }
-        finally {
-            $process.StandardInput.Close()
-        }
+        $standardInputTask = $process.StandardInput.BaseStream.WriteAsync(
+            $standardInputBytes,
+            0,
+            $standardInputBytes.Length
+        )
 
-        $timeoutMilliseconds = [int]($TimeoutSeconds * 1000)
-        if (-not $process.WaitForExit($timeoutMilliseconds)) {
+        if (-not $standardInputTask.IsCompleted) {
+            $remainingMilliseconds = [int][Math]::Max(
+                0,
+                $timeoutMilliseconds - [Math]::Ceiling($timeoutStopwatch.Elapsed.TotalMilliseconds)
+            )
+            if (
+                $remainingMilliseconds -eq 0 -or
+                -not $standardInputTask.Wait($remainingMilliseconds)
+            ) {
+                Stop-SlowRouterProcessTree -Process $process
+                return [pscustomobject]@{
+                    TimedOut = $true
+                    ExitCode = $null
+                    StandardOutput = ''
+                    StandardError = ''
+                }
+            }
+        }
+        [void]$standardInputTask.Wait(0)
+        $process.StandardInput.BaseStream.Close()
+        $standardInputClosed = $true
+
+        $remainingMilliseconds = [int][Math]::Max(
+            0,
+            $timeoutMilliseconds - [Math]::Ceiling($timeoutStopwatch.Elapsed.TotalMilliseconds)
+        )
+        $processExited = $process.HasExited
+        if (
+            -not $processExited -and
+            $remainingMilliseconds -gt 0
+        ) {
+            $processExited = $process.WaitForExit($remainingMilliseconds)
+        }
+        if (-not $processExited) {
             Stop-SlowRouterProcessTree -Process $process
             return [pscustomobject]@{
                 TimedOut = $true
@@ -574,7 +605,29 @@ function Invoke-SlowRouterProcess {
             }
         }
 
-        $process.WaitForExit()
+        $outputTasks = [System.Threading.Tasks.Task[]]@($stdoutTask, $stderrTask)
+        if (-not ($stdoutTask.IsCompleted -and $stderrTask.IsCompleted)) {
+            $remainingMilliseconds = [int][Math]::Max(
+                0,
+                $timeoutMilliseconds - [Math]::Ceiling($timeoutStopwatch.Elapsed.TotalMilliseconds)
+            )
+            if (
+                $remainingMilliseconds -eq 0 -or
+                -not [System.Threading.Tasks.Task]::WaitAll(
+                    $outputTasks,
+                    $remainingMilliseconds
+                )
+            ) {
+                Stop-SlowRouterProcessTree -Process $process
+                return [pscustomobject]@{
+                    TimedOut = $true
+                    ExitCode = $null
+                    StandardOutput = ''
+                    StandardError = ''
+                }
+            }
+        }
+
         return [pscustomobject]@{
             TimedOut = $false
             ExitCode = [int]$process.ExitCode
@@ -583,6 +636,14 @@ function Invoke-SlowRouterProcess {
         }
     }
     finally {
+        if ($processStarted -and -not $standardInputClosed) {
+            try {
+                $process.StandardInput.BaseStream.Close()
+            }
+            catch {
+                # Process teardown may already have closed the stdin pipe.
+            }
+        }
         $process.Dispose()
     }
 }

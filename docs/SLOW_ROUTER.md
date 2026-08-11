@@ -198,7 +198,7 @@ Prompt 明确禁止 Router：
 
 ## Timeout and temporary files
 
-`routing.slow.timeoutSeconds` 通过 `Process.WaitForExit(milliseconds)` 强制执行。超时后，Windows 上先尽力枚举后代进程，再调用 `taskkill /PID <pid> /T /F`，最后对仍存活的已知进程执行 `Kill` 和有限等待。
+`routing.slow.timeoutSeconds` 是从 Router process 启动开始的单一 deadline，覆盖异步 stdin delivery、进程执行与退出，以及 stdout/stderr 收集；每个阶段只能使用前序阶段消耗后的剩余预算。超时后，Windows 上先尽力枚举后代进程，再调用 `taskkill /PID <pid> /T /F`，最后对仍存活的已知进程执行 `Kill` 和有限等待。
 
 JSON Schema 等临时 artifact 只创建在：
 
