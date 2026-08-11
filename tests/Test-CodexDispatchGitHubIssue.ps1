@@ -717,11 +717,15 @@ try {
         -RepositoryResponse (
             New-RepositoryMetadataResponse -FullName 'owner/repo'
         ) `
-        -Responses @((New-IssueResponse -Repository 'Owner/Repo'))
+        -Responses @((New-IssueResponse -Repository 'owner/repo'))
     $caseIdentityResult = Invoke-FakePublish `
         -Fixture $caseRepository -Fake $caseIdentityFake
     Assert-Equal $caseIdentityResult.action 'created' `
         'case-only repository identity allowed'
+    Assert-Equal ($caseIdentityFake.AllRequests.method -join ',') 'GET,POST' `
+        'case-only identity performs metadata GET then Issue POST'
+    Assert-Equal $caseIdentityFake.Requests.Count 1 `
+        'case-only identity performs exactly one Issue API request'
     $passed++; Write-Host "PASS $passed/$testCount：repository identity case-insensitive exact"
 
     $missingPrivateFake = New-FakeTransport -RepositoryResponse (
@@ -989,11 +993,13 @@ try {
     } -Contains 'exposeThreadIdsInIssues 必须是 JSON bool' | Out-Null
     $passed++; Write-Host "PASS $passed/$testCount：privacy string false rejected"
 
-    $wrongRepoResponseFake = New-FakeTransport -Responses @(
-        (New-IssueResponse -Repository 'other-owner/other-repo')
-    )
+    $wrongRepoResponseFake = New-FakeTransport `
+        -RepositoryResponse (
+            New-RepositoryMetadataResponse -FullName 'owner/repo'
+        ) `
+        -Responses @((New-IssueResponse -Repository 'owner/other-repo'))
     Assert-AdapterError -Action {
-        Invoke-FakePublish -Fixture $pending -Fake $wrongRepoResponseFake
+        Invoke-FakePublish -Fixture $caseRepository -Fake $wrongRepoResponseFake
     } -Contains 'repository context 不匹配' | Out-Null
     $passed++; Write-Host "PASS $passed/$testCount：response repository mismatch rejected"
 

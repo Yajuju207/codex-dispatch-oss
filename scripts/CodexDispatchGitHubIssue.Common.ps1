@@ -508,7 +508,11 @@ function Assert-CodexDispatchGitHubRepositoryResponse {
         $expected = "$($script:CodexDispatchGitHubApiBaseUri)/repos/$Repository"
         if (
             $repositoryUrlProperty.Value -isnot [string] -or
-            [string]$repositoryUrlProperty.Value -cne $expected
+            -not [string]::Equals(
+                [string]$repositoryUrlProperty.Value,
+                $expected,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )
         ) {
             New-CodexDispatchGitHubIssueError `
                 -Message 'GitHub response repository context 不匹配。'
