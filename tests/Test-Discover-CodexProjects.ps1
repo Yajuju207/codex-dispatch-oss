@@ -58,6 +58,9 @@ function Write-TestConfiguration {
         [Parameter(Mandatory = $true)]
         [string]$WorkspaceRoot,
 
+        [Parameter(Mandatory = $true)]
+        [string]$StateDirectory,
+
         [Parameter()]
         [object]$ScanDepth = 1
     )
@@ -69,6 +72,7 @@ function Write-TestConfiguration {
             scanDepth = $ScanDepth
             allowReparsePoints = $false
         }
+        runtime = [ordered]@{ stateDirectory = $StateDirectory }
         controlPlane = [ordered]@{
             provider = 'github'
             repository = 'example-user/private-control'
@@ -109,11 +113,14 @@ function New-TestCase {
 
     $caseRoot = Join-Path $Parent $Name
     $workspace = Join-Path $caseRoot 'workspace'
+    $stateDirectory = Join-Path $caseRoot 'runtime-state'
     [void](New-Item -ItemType Directory -Path $workspace -Force)
+    [void](New-Item -ItemType Directory -Path $stateDirectory -Force)
     $configPath = Join-Path $caseRoot 'config.local.json'
     Write-TestConfiguration `
         -ConfigPath $configPath `
         -WorkspaceRoot $workspace `
+        -StateDirectory $stateDirectory `
         -ScanDepth $ScanDepth
 
     return [pscustomobject]@{

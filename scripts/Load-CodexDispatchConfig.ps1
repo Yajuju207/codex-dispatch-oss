@@ -139,6 +139,116 @@ function Get-RequiredConfigurationSection {
     return $value
 }
 
+function Get-SafeConfigurationDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DirectoryPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Context
+    )
+
+    if (-not (Test-Path -LiteralPath $DirectoryPath -PathType Container)) {
+        New-ConfigurationError "$Context 不存在或不是目录：$DirectoryPath。"
+    }
+
+    try {
+        $fullPath = [System.IO.Path]::GetFullPath($DirectoryPath)
+        $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+        if ([string]::IsNullOrWhiteSpace($pathRoot)) {
+            New-ConfigurationError "$Context 路径缺少 volume/root：$fullPath。"
+        }
+
+        $currentPath = $pathRoot
+        $currentItem = Get-Item -Force -LiteralPath $currentPath
+        if (($currentItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            New-ConfigurationError "$Context 的路径链包含 reparse point：$currentPath。"
+        }
+
+        $relativePath = $fullPath.Substring($pathRoot.Length)
+        foreach ($segment in $relativePath.Split(
+            @('\', '/'),
+            [System.StringSplitOptions]::RemoveEmptyEntries
+        )) {
+            $currentPath = Join-Path -Path $currentPath -ChildPath $segment
+            $currentItem = Get-Item -Force -LiteralPath $currentPath
+            if (-not $currentItem.PSIsContainer) {
+                New-ConfigurationError "$Context 的路径链包含非目录：$currentPath。"
+            }
+            if (($currentItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                New-ConfigurationError "$Context 的路径链包含 reparse point：$currentPath。"
+            }
+        }
+
+        return (Get-Item -Force -LiteralPath $fullPath)
+    }
+    catch {
+        if ($_.Exception.Message.StartsWith(
+            'Codex Dispatch 配置错误：',
+            [System.StringComparison]::Ordinal
+        )) {
+            throw
+        }
+        New-ConfigurationError "$Context 安全检查失败：$DirectoryPath。$($_.Exception.Message)"
+    }
+}
+
+function Test-ConfigurationPathDescendant {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CandidatePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ParentPath
+    )
+
+    $candidate = [System.IO.Path]::GetFullPath($CandidatePath).TrimEnd('\', '/')
+    $parent = [System.IO.Path]::GetFullPath($ParentPath).TrimEnd('\', '/')
+    $parentPrefix = $parent + [System.IO.Path]::DirectorySeparatorChar
+    return $candidate.StartsWith(
+        $parentPrefix,
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+}
+
+function Assert-ConfigurationDirectoryOutsideGitWorkingTree {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DirectoryPath
+    )
+
+    try {
+        $currentPath = [System.IO.Path]::GetFullPath($DirectoryPath)
+        while ($true) {
+            $gitMarker = Join-Path -Path $currentPath -ChildPath '.git'
+            if (Test-Path -LiteralPath $gitMarker) {
+                New-ConfigurationError (
+                    'runtime.stateDirectory 不能位于 Git working tree 内，' +
+                    '以免本地 dispatch state 被意外纳入版本控制。'
+                )
+            }
+
+            $parent = [System.IO.Directory]::GetParent($currentPath)
+            if ($null -eq $parent) {
+                break
+            }
+            $currentPath = $parent.FullName
+        }
+    }
+    catch {
+        if ($_.Exception.Message.StartsWith(
+            'Codex Dispatch 配置错误：',
+            [System.StringComparison]::Ordinal
+        )) {
+            throw
+        }
+        New-ConfigurationError (
+            'runtime.stateDirectory Git working tree 安全检查失败：' +
+            "$DirectoryPath。$($_.Exception.Message)"
+        )
+    }
+}
+
 $configFile = Get-ConfigurationFilePath -RequestedPath $Path
 
 try {
@@ -179,6 +289,9 @@ if ($null -ne $versionProperty) {
 
 $workspace = Copy-ConfigurationSection (
     Get-RequiredConfigurationSection -Document $document -Name 'workspace'
+)
+$runtime = Copy-ConfigurationSection (
+    Get-RequiredConfigurationSection -Document $document -Name 'runtime'
 )
 $controlPlane = Copy-ConfigurationSection (
     Get-RequiredConfigurationSection -Document $document -Name 'controlPlane'
@@ -241,6 +354,62 @@ if (
 }
 $workspace.root = $workspaceRootItem.FullName
 
+$stateDirectoryProperty = $runtime.PSObject.Properties['stateDirectory']
+if (
+    $null -eq $stateDirectoryProperty -or
+    $stateDirectoryProperty.Value -isnot [string] -or
+    [string]::IsNullOrWhiteSpace([string]$stateDirectoryProperty.Value)
+) {
+    New-ConfigurationError 'runtime.stateDirectory 必须是非空字符串。'
+}
+
+$stateDirectoryText = [Environment]::ExpandEnvironmentVariables(
+    ([string]$stateDirectoryProperty.Value).Trim()
+)
+try {
+    $stateDirectory = if ([System.IO.Path]::IsPathRooted($stateDirectoryText)) {
+        [System.IO.Path]::GetFullPath($stateDirectoryText)
+    }
+    else {
+        [System.IO.Path]::GetFullPath((Join-Path $configDirectory $stateDirectoryText))
+    }
+}
+catch {
+    New-ConfigurationError "runtime.stateDirectory 路径无效：$stateDirectoryText。$($_.Exception.Message)"
+}
+
+$stateDirectoryItem = Get-SafeConfigurationDirectory `
+    -DirectoryPath $stateDirectory `
+    -Context 'runtime.stateDirectory'
+Assert-ConfigurationDirectoryOutsideGitWorkingTree `
+    -DirectoryPath $stateDirectoryItem.FullName
+$normalizedWorkspaceRoot = [System.IO.Path]::GetFullPath(
+    $workspaceRootItem.FullName
+).TrimEnd('\', '/')
+$normalizedStateDirectory = [System.IO.Path]::GetFullPath(
+    $stateDirectoryItem.FullName
+).TrimEnd('\', '/')
+if ([string]::Equals(
+    $normalizedWorkspaceRoot,
+    $normalizedStateDirectory,
+    [System.StringComparison]::OrdinalIgnoreCase
+)) {
+    New-ConfigurationError 'runtime.stateDirectory 不能等于 workspace.root；两者必须位于彼此分离的目录树。'
+}
+if (Test-ConfigurationPathDescendant `
+    -CandidatePath $normalizedStateDirectory `
+    -ParentPath $normalizedWorkspaceRoot
+) {
+    New-ConfigurationError 'runtime.stateDirectory 不能位于 workspace.root 内部。'
+}
+if (Test-ConfigurationPathDescendant `
+    -CandidatePath $normalizedWorkspaceRoot `
+    -ParentPath $normalizedStateDirectory
+) {
+    New-ConfigurationError 'workspace.root 不能位于 runtime.stateDirectory 内部。'
+}
+$runtime.stateDirectory = $stateDirectoryItem.FullName
+
 $repositoryProperty = $controlPlane.PSObject.Properties['repository']
 if (
     $null -eq $repositoryProperty -or
@@ -275,6 +444,7 @@ $controlPlane.repository = $repository
 
 [pscustomobject][ordered]@{
     workspace = $workspace
+    runtime = $runtime
     controlPlane = $controlPlane
     routing = $routing
     codex = $codex

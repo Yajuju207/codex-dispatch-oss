@@ -84,6 +84,9 @@ function Write-TestConfiguration {
         [string]$WorkspaceRoot,
 
         [Parameter(Mandatory = $true)]
+        [string]$StateDirectory,
+
+        [Parameter(Mandatory = $true)]
         [bool]$FastEnabled,
 
         [Parameter()]
@@ -100,6 +103,7 @@ function Write-TestConfiguration {
             scanDepth = 1
             allowReparsePoints = $false
         }
+        runtime = [ordered]@{ stateDirectory = $StateDirectory }
         controlPlane = [ordered]@{
             provider = 'github'
             repository = 'example-user/private-control'
@@ -210,12 +214,15 @@ function New-TestCase {
 
     $root = Join-Path $Parent $Name
     $workspace = Join-Path $root 'workspace'
+    $stateDirectory = Join-Path $root 'runtime-state'
     [void](New-Item -ItemType Directory -Path $workspace -Force)
+    [void](New-Item -ItemType Directory -Path $stateDirectory -Force)
     $config = Join-Path $root 'config.local.json'
     $index = Join-Path $root 'project-index.json'
     Write-TestConfiguration `
         -ConfigPath $config `
         -WorkspaceRoot $workspace `
+        -StateDirectory $stateDirectory `
         -FastEnabled $FastEnabled `
         -MinimumStrongScore $MinimumStrongScore `
         -MinimumLead $MinimumLead
