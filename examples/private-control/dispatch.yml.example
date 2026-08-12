@@ -1,0 +1,222 @@
+name: Codex Dispatch v0.1
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Task for the local Codex Dispatch engine
+        required: true
+        type: string
+
+permissions:
+  issues: write
+
+concurrency:
+  group: codex-dispatch-control-plane-v0-1
+  cancel-in-progress: false
+  queue: max
+
+env:
+  CODEX_DISPATCH_ENGINE_REPOSITORY: https://github.com/Yajuju207/codex-dispatch-oss.git
+  CODEX_DISPATCH_ENGINE_SHA: e311f659bc641ea9b824f3cfd17974dcaf3176d4
+  CODEX_DISPATCH_CONTROL_ROOT: C:\CodexDispatch\control
+
+jobs:
+  dispatch:
+    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on:
+      - self-hosted
+      - Windows
+      - X64
+      - codex-dispatch-control
+    steps:
+      - name: Validate dispatch request
+        env:
+          CODEX_DISPATCH_TASK: ${{ inputs.task }}
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version 2.0
+          if ($null -eq $env:CODEX_DISPATCH_TASK) {
+              throw 'DISPATCH_CONTRACT_FAILURE: Task is required.'
+          }
+          if ($env:CODEX_DISPATCH_TASK.Length -lt 1 -or
+              $env:CODEX_DISPATCH_TASK.Length -gt 16384) {
+              throw 'DISPATCH_CONTRACT_FAILURE: Task length must be 1..16384 .NET string characters.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CODEX_DISPATCH_TASK)) {
+              throw 'DISPATCH_CONTRACT_FAILURE: Task must not be whitespace-only.'
+          }
+
+      - name: Acquire pinned OSS engine without credentials
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version 2.0
+          foreach ($name in @('CODEX_DISPATCH_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN')) {
+              [Environment]::SetEnvironmentVariable(
+                  $name, $null, [EnvironmentVariableTarget]::Process
+              )
+          }
+          $env:GIT_TERMINAL_PROMPT = '0'
+          $env:GIT_CONFIG_NOSYSTEM = '1'
+          $env:GIT_CONFIG_COUNT = '0'
+          $engineRoot = Join-Path $env:RUNNER_TEMP (
+              'codex-dispatch-engine-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT
+          )
+          if (Test-Path -LiteralPath $engineRoot) {
+              throw 'ENGINE_ACQUISITION_FAILURE: Fresh engine directory already exists.'
+          }
+          [void](New-Item -ItemType Directory -Path $engineRoot)
+          $emptyGitConfig = Join-Path $engineRoot 'empty-global.gitconfig'
+          [IO.File]::WriteAllText($emptyGitConfig, '')
+          $env:GIT_CONFIG_GLOBAL = $emptyGitConfig
+
+          function Invoke-PinnedEngineGit {
+              param([Parameter(Mandatory = $true)][string[]]$Arguments)
+              & git -c credential.helper= -c core.askPass= @Arguments
+              if ($LASTEXITCODE -ne 0) {
+                  throw "ENGINE_ACQUISITION_FAILURE: native Git exited $LASTEXITCODE."
+              }
+          }
+
+          Invoke-PinnedEngineGit -Arguments @('-C', $engineRoot, 'init', '--quiet')
+          Invoke-PinnedEngineGit -Arguments @(
+              '-C', $engineRoot, 'remote', 'add', 'origin',
+              $env:CODEX_DISPATCH_ENGINE_REPOSITORY
+          )
+          Invoke-PinnedEngineGit -Arguments @(
+              '-C', $engineRoot, 'fetch', '--no-tags', '--depth=1',
+              'origin', $env:CODEX_DISPATCH_ENGINE_SHA
+          )
+          Invoke-PinnedEngineGit -Arguments @(
+              '-C', $engineRoot, 'checkout', '--detach', '--quiet', 'FETCH_HEAD'
+          )
+          $actualSha = & git -C $engineRoot rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or
+              $actualSha -cne $env:CODEX_DISPATCH_ENGINE_SHA) {
+              throw 'ENGINE_ACQUISITION_FAILURE: detached engine SHA verification failed.'
+          }
+
+      - name: Validate local configuration and control repository identity
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version 2.0
+          foreach ($name in @('CODEX_DISPATCH_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN')) {
+              [Environment]::SetEnvironmentVariable(
+                  $name, $null, [EnvironmentVariableTarget]::Process
+              )
+          }
+          $engineRoot = Join-Path $env:RUNNER_TEMP (
+              'codex-dispatch-engine-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT
+          )
+          $controlRoot = [IO.Path]::GetFullPath($env:CODEX_DISPATCH_CONTROL_ROOT)
+          $configPath = Join-Path $controlRoot 'config.local.json'
+          if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+              throw 'CONTROL_REPOSITORY_PREFLIGHT_FAILURE: local config.local.json is missing.'
+          }
+          $config = & (Join-Path $engineRoot 'scripts\Load-CodexDispatchConfig.ps1') `
+              -Path $configPath
+          $eventRepository = [string]$env:GITHUB_REPOSITORY
+          $repositoryPattern = '^(?<owner>[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)/(?<repo>[A-Za-z0-9._-]{1,100})$'
+          $eventMatch = [regex]::Match($eventRepository, $repositoryPattern)
+          if (-not $eventMatch.Success -or
+              $eventMatch.Groups['owner'].Value.Contains('--') -or
+              $eventMatch.Groups['repo'].Value -in @('.', '..')) {
+              throw 'CONTROL_REPOSITORY_PREFLIGHT_FAILURE: GITHUB_REPOSITORY identity is invalid.'
+          }
+          if ([string]$config.controlPlane.repository -cne $eventRepository) {
+              throw 'CONTROL_REPOSITORY_PREFLIGHT_FAILURE: configured control repository does not exactly match GITHUB_REPOSITORY.'
+          }
+
+      - name: Rebuild current Project Index without credentials
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version 2.0
+          foreach ($name in @('CODEX_DISPATCH_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN')) {
+              [Environment]::SetEnvironmentVariable(
+                  $name, $null, [EnvironmentVariableTarget]::Process
+              )
+          }
+          $engineRoot = Join-Path $env:RUNNER_TEMP (
+              'codex-dispatch-engine-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT
+          )
+          $controlRoot = [IO.Path]::GetFullPath($env:CODEX_DISPATCH_CONTROL_ROOT)
+          $configPath = Join-Path $controlRoot 'config.local.json'
+          $indexPath = Join-Path $controlRoot 'project-index.json'
+          [void](& (Join-Path $engineRoot 'scripts\Build-CodexProjectIndex.ps1') `
+              -ConfigPath $configPath -OutputPath $indexPath)
+
+      - name: Invoke initial dispatch and classify structured outcome
+        env:
+          CODEX_DISPATCH_TASK: ${{ inputs.task }}
+          CODEX_DISPATCH_GITHUB_TOKEN: ${{ github.token }}
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version 2.0
+          foreach ($name in @('GH_TOKEN', 'GITHUB_TOKEN')) {
+              [Environment]::SetEnvironmentVariable(
+                  $name, $null, [EnvironmentVariableTarget]::Process
+              )
+          }
+          if ($null -eq $env:CODEX_DISPATCH_TASK -or
+              $env:CODEX_DISPATCH_TASK.Length -lt 1 -or
+              $env:CODEX_DISPATCH_TASK.Length -gt 16384 -or
+              [string]::IsNullOrWhiteSpace($env:CODEX_DISPATCH_TASK)) {
+              throw 'DISPATCH_CONTRACT_FAILURE: Task validation changed before invocation.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CODEX_DISPATCH_GITHUB_TOKEN)) {
+              throw 'CONTROL_PLANE_CREDENTIAL_FAILURE: Issue credential is unavailable.'
+          }
+          $engineRoot = Join-Path $env:RUNNER_TEMP (
+              'codex-dispatch-engine-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT
+          )
+          $controlRoot = [IO.Path]::GetFullPath($env:CODEX_DISPATCH_CONTROL_ROOT)
+          $configPath = Join-Path $controlRoot 'config.local.json'
+          Push-Location $controlRoot
+          try {
+              try {
+                  $returned = @(& (Join-Path $engineRoot 'scripts\Invoke-CodexDispatch.ps1') `
+                      -Task $env:CODEX_DISPATCH_TASK -ConfigPath $configPath)
+              }
+              catch {
+                  throw 'CONTROL_PLANE_PROCESS_FAILURE: Orchestrator did not return a structured result.'
+              }
+          }
+          finally {
+              Pop-Location
+          }
+          if ($returned.Count -ne 1) {
+              throw 'CONTROL_PLANE_PROCESS_FAILURE: Orchestrator result count is invalid.'
+          }
+          $result = $returned[0]
+          foreach ($field in @(
+              'dispatchId', 'phase', 'status', 'issuePublication',
+              'issueNumber', 'issueUrl'
+          )) {
+              if ($null -eq $result.PSObject.Properties[$field]) {
+                  throw 'CONTROL_PLANE_PROCESS_FAILURE: Orchestrator result contract is invalid.'
+              }
+          }
+
+          $classification = switch ([string]$result.status) {
+              'completed' { 'DISPATCH_COMPLETED' }
+              'needs_input' { 'DISPATCH_NEEDS_INPUT' }
+              'failed' { 'DISPATCH_EXECUTION_FAILED' }
+              default {
+                  throw 'CONTROL_PLANE_PROCESS_FAILURE: Orchestrator returned an invalid status.'
+              }
+          }
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY `
+              -Value ("Dispatch: ``{0}``  " -f [string]$result.dispatchId)
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY `
+              -Value ("Outcome: ``{0}``  " -f $classification)
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY `
+              -Value ("Issue publication: ``{0}``" -f [string]$result.issuePublication)
+
+          if ([string]$result.issuePublication -cne 'created') {
+              throw 'PROJECTION_FAILURE: durable Runtime State remains authoritative; do not retry automatically.'
+          }
