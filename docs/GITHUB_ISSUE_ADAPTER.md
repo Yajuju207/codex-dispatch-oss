@@ -163,9 +163,13 @@ Exact thread-ID replacement 不是 general secret redaction。Arbitrary text 仍
 
 ## Create and update
 
-Private-repository preflight 成功后，Create 才会对 `/repos/{configured-repository}/issues` 发送 `title` 和 `body`。只有 `controlPlane.issueAssignee` 存在、trim 后非空且符合 conservative GitHub login syntax 时才发送单元素 `assignees`；否则省略该字段。
+Private-repository preflight 成功后，Create 才会对 `/repos/{configured-repository}/issues` 发送 `title` 和 `body`。只有 `controlPlane.issueAssignee` 存在、trim 后非空且符合 conservative GitHub login syntax 时才发送单元素 `assignees`；否则省略该字段。GitHub Create Issue 的初始状态必须由响应明确验证为 `open`。
 
-Update 先 GET configured repository 中的 Issue，并拒绝带 `pull_request` object 的响应。Body 必须存在且以合法 markers 开头。需要同步时，PATCH 只发送 canonical `title`、`body` 和 desired `state`。
+当 projection 的 desired state 为 `open` 时，验证 POST 响应后直接返回 `action=created`。当 desired state 为 `closed` 时，publisher 在同一次调用中立即对新建 Issue 的 exact positive number 发送 PATCH；payload 只包含 canonical `title`、`body` 和 `state=closed`。只有 PATCH 响应的 Issue number 与新建 Issue 相同、且响应 state exactly `closed` 时，publisher 才返回 `action=created`。v0.1 不发送 `state_reason`。
+
+如果 POST 已成功且经过 number、`html_url`、repository context 和 `state=open` 验证，但随后的 closed reconciliation PATCH 请求或响应验证失败，publisher 会抛出 bounded、token-safe partial-create error。错误明确包含已创建 Issue 的 positive number 和 validated `html_url`。调用者不得在收到该错误后不带 `IssueNumber` 盲目重试 Publish，否则可能创建 duplicate Issue；本 Adapter 不通过 Issue search/discovery 猜测该映射。
+
+Update 先 GET configured repository 中的 Issue，并拒绝带 `pull_request` object 的响应。Body 必须存在且以合法 markers 开头。需要同步时，PATCH 只发送 canonical `title`、`body` 和 desired `state`。PATCH 响应必须包含 string state，且 exactly 等于 projection desired state；否则 publication fail closed，不报告成功。
 
 Remote title、body、state 不会反向更新 Runtime State。Update 唯一用于决策的 remote data 是 exact dispatch marker 与 projection revision；它们只回答“这是哪个 projection”和“是否已经存在更新版本”。
 
