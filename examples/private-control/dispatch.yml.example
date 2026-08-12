@@ -60,6 +60,7 @@ jobs:
           }
           $env:GIT_TERMINAL_PROMPT = '0'
           $env:GIT_CONFIG_NOSYSTEM = '1'
+          $env:GIT_CONFIG_COUNT = '0'
           $engineRoot = Join-Path $env:RUNNER_TEMP (
               'codex-dispatch-engine-' + $env:GITHUB_RUN_ID + '-' + $env:GITHUB_RUN_ATTEMPT
           )

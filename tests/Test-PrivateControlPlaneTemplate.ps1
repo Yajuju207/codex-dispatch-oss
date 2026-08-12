@@ -6,7 +6,7 @@ $templatePath = Join-Path $repoRoot 'examples\private-control\dispatch.yml.examp
 $documentPath = Join-Path $repoRoot 'docs\PRIVATE_CONTROL_PLANE.md'
 $activeWorkflowPath = Join-Path $repoRoot '.github\workflows'
 
-$testCount = 57
+$testCount = 58
 $script:passed = 0
 
 function Assert-True {
@@ -233,6 +233,17 @@ Assert-True ($template.Contains("$env:GIT_CONFIG_NOSYSTEM = '1'")) `
 Assert-True ($template.Contains('$env:GIT_CONFIG_GLOBAL = $emptyGitConfig')) `
     'fresh empty global Git config'
 Complete-Test 'engine acquisition disables credentials and prompting'
+
+$gitConfigCountText = '$env:GIT_CONFIG_COUNT = ''0'''
+$gitConfigCountIndex = $template.IndexOf($gitConfigCountText)
+$firstNativeGitIndex = $template.IndexOf('& git')
+Assert-Equal ([regex]::Matches(
+    $template, [regex]::Escape($gitConfigCountText)
+)).Count 1 'GIT_CONFIG_COUNT assignment count'
+Assert-True ($gitConfigCountIndex -ge 0) 'exact GIT_CONFIG_COUNT zero assignment'
+Assert-True ($firstNativeGitIndex -gt $gitConfigCountIndex) `
+    'GIT_CONFIG_COUNT assignment precedes first native Git invocation'
+Complete-Test 'Git environment command-scope config pairs are disabled before native Git'
 
 Assert-True ($template -match '(?m)^  CODEX_DISPATCH_CONTROL_ROOT: C:\\CodexDispatch\\control\r?$') `
     'stable control root'

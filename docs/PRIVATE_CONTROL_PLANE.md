@@ -135,9 +135,12 @@ engine is not accepted.
 Engine fetch removes `CODEX_DISPATCH_GITHUB_TOKEN`, `GH_TOKEN`, and
 `GITHUB_TOKEN` from the process environment, disables credential helpers and
 interactive prompting, ignores system Git configuration, uses a fresh empty
-global Git configuration, and uses only the public repository URL. Failure or
-SHA mismatch stops before configuration preflight, Index rebuild, Runtime State
-creation, or Issue credential injection.
+global Git configuration, and forces `GIT_CONFIG_COUNT=0` so Git processes no
+`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` environment command-scope config
+pairs. It then uses only the public repository URL. This is predictable native
+Git acquisition isolation, not general protection from a compromised runner.
+Failure or SHA mismatch stops before configuration preflight, Index rebuild,
+Runtime State creation, or Issue credential injection.
 
 Upgrading the engine means reviewing a new OSS commit and changing the pinned
 full SHA through the private repository's protected change process.
