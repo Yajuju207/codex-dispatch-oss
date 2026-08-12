@@ -530,7 +530,11 @@ function Get-CodexDispatchGitHubValidatedIssueResponse {
 
         [Parameter()]
         [AllowNull()]
-        [object]$ExpectedNumber
+        [object]$ExpectedNumber,
+
+        [Parameter()]
+        [AllowNull()]
+        [object]$ExpectedState
     )
 
     if (
@@ -557,6 +561,26 @@ function Get-CodexDispatchGitHubValidatedIssueResponse {
     }
     Assert-CodexDispatchGitHubRepositoryResponse `
         -Response $Response -Repository $Repository
+    if ($PSBoundParameters.ContainsKey('ExpectedState')) {
+        if (
+            $ExpectedState -isnot [string] -or
+            [string]$ExpectedState -cnotin @('open', 'closed')
+        ) {
+            New-CodexDispatchGitHubIssueError `
+                -Message 'ExpectedState 必须 exactly open 或 closed。'
+        }
+        $stateProperty = Get-CodexDispatchGitHubProperty `
+            -Object $Response -Name 'state' -Required
+        if (
+            $stateProperty.Value -isnot [string] -or
+            [string]$stateProperty.Value -cne [string]$ExpectedState
+        ) {
+            New-CodexDispatchGitHubIssueError -Message (
+                'GitHub response Issue state 与 expected state 不匹配：' +
+                "expected $ExpectedState。"
+            )
+        }
+    }
     return [pscustomobject][ordered]@{
         number = $number
         url = [string]$urlProperty.Value
@@ -838,7 +862,34 @@ function Invoke-CodexDispatchGitHubIssuePublishInternal {
             -Body (ConvertTo-CodexDispatchGitHubJson -Payload $payload) `
             -Transport $Transport
         $validated = Get-CodexDispatchGitHubValidatedIssueResponse `
-            -Response $response -Repository $repository
+            -Response $response -Repository $repository `
+            -ExpectedState 'open'
+        if ([string]$projection.desiredState -ceq 'closed') {
+            $createdIssuePath = "/repos/$repository/issues/$($validated.number)"
+            $closedPayload = [ordered]@{
+                title = [string]$projection.title
+                body = [string]$projection.body
+                state = 'closed'
+            }
+            try {
+                $closedResponse = Invoke-CodexDispatchGitHubRequest `
+                    -Method 'PATCH' -Path $createdIssuePath -Token $Token `
+                    -Body (ConvertTo-CodexDispatchGitHubJson -Payload $closedPayload) `
+                    -Transport $Transport
+                [void](Get-CodexDispatchGitHubValidatedIssueResponse `
+                    -Response $closedResponse -Repository $repository `
+                    -ExpectedNumber $validated.number -ExpectedState 'closed')
+            }
+            catch {
+                $detail = ConvertTo-CodexDispatchGitHubSafeDiagnostic `
+                    -Value $_.Exception.Message -Token $Token -MaximumLength 2048
+                New-CodexDispatchGitHubIssueError -Message (
+                    'Issue 已创建，但 final desired-state synchronization 失败。' +
+                    "IssueNumber=$($validated.number)；" +
+                    "IssueUrl=$($validated.url)；desiredState=closed。$detail"
+                ) -Token $Token
+            }
+        }
         return New-CodexDispatchGitHubPublishResult `
             -Action created -Projection $projection -Repository $repository `
             -IssueNumber $validated.number -IssueUrl $validated.url
@@ -903,7 +954,8 @@ function Invoke-CodexDispatchGitHubIssuePublishInternal {
         -Transport $Transport
     $validatedUpdated = Get-CodexDispatchGitHubValidatedIssueResponse `
         -Response $updated -Repository $repository `
-        -ExpectedNumber $canonicalIssueNumber
+        -ExpectedNumber $canonicalIssueNumber `
+        -ExpectedState ([string]$projection.desiredState)
     return New-CodexDispatchGitHubPublishResult `
         -Action updated -Projection $projection -Repository $repository `
         -IssueNumber $validatedUpdated.number -IssueUrl $validatedUpdated.url

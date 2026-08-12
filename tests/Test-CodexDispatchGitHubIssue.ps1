@@ -207,13 +207,17 @@ function Get-Projection {
 function New-IssueResponse {
     param(
         [Parameter()][int64]$Number = 17,
-        [Parameter()][string]$Repository = 'example-owner/private-control'
+        [Parameter()][string]$Repository = 'example-owner/private-control',
+        [Parameter()][AllowNull()][object]$State = 'open',
+        [Parameter()][switch]$OmitState
     )
-    return [pscustomobject][ordered]@{
+    $issue = [ordered]@{
         number = $Number
         html_url = "https://github.com/$Repository/issues/$Number"
         repository_url = "https://api.github.com/repos/$Repository"
     }
+    if (-not $OmitState) { $issue['state'] = $State }
+    return [pscustomobject]$issue
 }
 
 function New-RepositoryMetadataResponse {
@@ -317,7 +321,7 @@ function New-HttpException {
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
     ('codex-dispatch-github-issue-tests-' + [guid]::NewGuid().ToString('N'))
 $passed = 0
-$testCount = 71
+$testCount = 79
 try {
     [void](New-Item -ItemType Directory -Path $testRoot)
 
@@ -649,6 +653,119 @@ try {
         'assignees omitted'
     $passed++; Write-Host "PASS $passed/$testCount：H absent assignee omitted"
 
+    $routingNeedsCreateFake = New-FakeTransport -Responses @(
+        (New-IssueResponse -Number 23 -State 'open')
+    )
+    $routingNeedsCreated = Invoke-FakePublish `
+        -Fixture $routingNeeds -Fake $routingNeedsCreateFake
+    Assert-Equal ($routingNeedsCreateFake.AllRequests.method -join ',') 'GET,POST' `
+        'routing needs_input create stays open without PATCH'
+    Assert-Equal $routingNeedsCreated.action 'created' `
+        'routing needs_input create action'
+    $passed++; Write-Host "PASS $passed/$testCount：routing needs_input create remains open"
+
+    $workerNeedsCreateFake = New-FakeTransport -Responses @(
+        (New-IssueResponse -Number 24 -State 'open')
+    )
+    $workerNeedsCreated = Invoke-FakePublish `
+        -Fixture $workerNeeds -Fake $workerNeedsCreateFake
+    Assert-Equal ($workerNeedsCreateFake.AllRequests.method -join ',') 'GET,POST' `
+        'worker needs_input create stays open without PATCH'
+    Assert-Equal $workerNeedsCreated.action 'created' `
+        'worker needs_input create action'
+    $passed++; Write-Host "PASS $passed/$testCount：worker needs_input create remains open"
+
+    $failedCreateFake = New-FakeTransport -Responses @(
+        (New-IssueResponse -Number 25 -State 'open')
+    )
+    $failedCreated = Invoke-FakePublish -Fixture $failed -Fake $failedCreateFake
+    Assert-Equal ($failedCreateFake.AllRequests.method -join ',') 'GET,POST' `
+        'worker failed create stays open without PATCH'
+    Assert-Equal $failedCreated.action 'created' 'worker failed create action'
+    $passed++; Write-Host "PASS $passed/$testCount：worker failed create remains open"
+
+    $completedCreateFake = New-FakeTransport -Responses @(
+        (New-IssueResponse -Number 26 -State 'open'),
+        (New-IssueResponse -Number 26 -State 'closed')
+    )
+    $completedCreated = Invoke-FakePublish `
+        -Fixture $completed -Fake $completedCreateFake
+    Assert-Equal ($completedCreateFake.AllRequests.method -join ',') 'GET,POST,PATCH' `
+        'completed create exact request sequence'
+    Assert-Equal $completedCreateFake.Requests[1].path `
+        '/repos/example-owner/private-control/issues/26' `
+        'completed create reconciles the same Issue'
+    $completedCreatePatch = $completedCreateFake.Requests[1].body | ConvertFrom-Json
+    Assert-Equal ($completedCreatePatch.PSObject.Properties.Name -join ',') `
+        'title,body,state' 'completed create PATCH exact fields'
+    Assert-Equal $completedCreatePatch.state 'closed' `
+        'completed create PATCH desired state'
+    Assert-Equal $completedCreated.action 'created' `
+        'completed create retains created action'
+    Assert-Equal $completedCreated.issueNumber ([int64]26) `
+        'completed create returns created Issue number'
+    Assert-Equal $completedCreated.issueUrl `
+        'https://github.com/example-owner/private-control/issues/26' `
+        'completed create returns validated created Issue URL'
+    $passed++; Write-Host "PASS $passed/$testCount：completed create reconciles closed"
+
+    $partialToken = 'partial-create-secret-token-8427'
+    $partialCreateFake = New-FakeTransport -Responses @(
+        (New-IssueResponse -Number 27 -State 'open'),
+        (New-HttpException -Status 503 -Message "closing denied $partialToken")
+    )
+    $partialMessage = Get-ThrownMessage -Action {
+        Invoke-FakePublish -Fixture $completed -Fake $partialCreateFake `
+            -Token $partialToken
+    }
+    Assert-True $partialMessage.Contains('Issue 已创建') `
+        'partial create error states Issue already created'
+    Assert-True $partialMessage.Contains('IssueNumber=27') `
+        'partial create error includes positive Issue number'
+    Assert-True $partialMessage.Contains(
+        'IssueUrl=https://github.com/example-owner/private-control/issues/27'
+    ) 'partial create error includes validated Issue URL'
+    Assert-True $partialMessage.Contains('final desired-state synchronization 失败') `
+        'partial create error identifies desired-state failure'
+    Assert-True (-not $partialMessage.Contains($partialToken)) `
+        'partial create error redacts configured token'
+    Assert-True ($partialMessage.Length -lt 2300) 'partial create error bounded'
+    Assert-Equal ($partialCreateFake.Requests.method -join ',') 'POST,PATCH' `
+        'partial create fails only after POST then PATCH'
+    $passed++; Write-Host "PASS $passed/$testCount：partial completed create error is explicit and token-safe"
+
+    foreach ($invalidCreateState in @(
+        [pscustomobject]@{ Name = 'missing'; Response = (New-IssueResponse -OmitState) },
+        [pscustomobject]@{ Name = 'non-string'; Response = (New-IssueResponse -State 42) }
+    )) {
+        $invalidCreateStateFake = New-FakeTransport -Responses @(
+            $invalidCreateState.Response
+        )
+        Assert-AdapterError -Action {
+            Invoke-FakePublish -Fixture $routingNeeds -Fake $invalidCreateStateFake
+        } -Contains $(if ($invalidCreateState.Name -eq 'missing') {
+            '缺少必需字段：state'
+        } else {
+            'Issue state 与 expected state 不匹配'
+        }) | Out-Null
+        Assert-Equal $invalidCreateStateFake.Requests.Count 1 `
+            "$($invalidCreateState.Name) create state fails after POST"
+    }
+    $passed++; Write-Host "PASS $passed/$testCount：missing/malformed create state fails closed"
+
+    $closedMismatchFake = New-FakeTransport -Responses @(
+        (New-IssueResponse -Number 28 -State 'open'),
+        (New-IssueResponse -Number 28 -State 'open')
+    )
+    $closedMismatchMessage = Assert-AdapterError -Action {
+        Invoke-FakePublish -Fixture $completed -Fake $closedMismatchFake
+    } -Contains 'final desired-state synchronization 失败'
+    Assert-True $closedMismatchMessage.Contains('IssueNumber=28') `
+        'closed reconciliation mismatch identifies partial Issue'
+    Assert-Equal ($closedMismatchFake.Requests.method -join ',') 'POST,PATCH' `
+        'closed reconciliation response mismatch after PATCH'
+    $passed++; Write-Host "PASS $passed/$testCount：closed reconciliation must return closed"
+
     $priorToken = [Environment]::GetEnvironmentVariable(
         'CODEX_DISPATCH_GITHUB_TOKEN', [EnvironmentVariableTarget]::Process
     )
@@ -814,6 +931,18 @@ try {
     Assert-Equal $updated.action 'updated' 'update action'
     $passed++; Write-Host "PASS $passed/$testCount：I/O update GET then PATCH lower revision"
 
+    $updateStateMismatchFake = New-FakeTransport -Responses @(
+        (New-RemoteIssue -Projection $updateProjection -Body $oldBody),
+        (New-IssueResponse -State 'closed')
+    )
+    Assert-AdapterError -Action {
+        Invoke-FakePublish -Fixture $workerNeeds -Fake $updateStateMismatchFake `
+            -IssueNumber 17
+    } -Contains 'Issue state 与 expected state 不匹配' | Out-Null
+    Assert-Equal ($updateStateMismatchFake.Requests.method -join ',') 'GET,PATCH' `
+        'normal update validates PATCH final state'
+    $passed++; Write-Host "PASS $passed/$testCount：normal update final state validated"
+
     $patchPayload = $updateFake.Requests[1].body | ConvertFrom-Json
     Assert-Equal ($patchPayload.PSObject.Properties.Name -join ',') `
         'title,body,state' 'PATCH exact fields'
@@ -896,11 +1025,16 @@ try {
     $completedFake = New-FakeTransport -Responses @(
         (New-RemoteIssue -Projection $completedProjection -Body $completedOldBody `
             -State 'open'),
-        (New-IssueResponse)
+        (New-IssueResponse -State 'closed')
     )
-    Invoke-FakePublish -Fixture $completed -Fake $completedFake -IssueNumber 17 | Out-Null
+    $completedUpdated = Invoke-FakePublish `
+        -Fixture $completed -Fake $completedFake -IssueNumber 17
+    Assert-Equal ($completedFake.AllRequests.method -join ',') 'GET,GET,PATCH' `
+        'completed existing Issue exact request sequence'
     Assert-Equal ($completedFake.Requests[1].body | ConvertFrom-Json).state 'closed' `
         'completed PATCH closed'
+    Assert-Equal $completedUpdated.action 'updated' `
+        'completed existing Issue remains updated'
     $passed++; Write-Host "PASS $passed/$testCount：S completed PATCH closes"
 
     $failedOldBody = $failedProjection.body.Replace(
