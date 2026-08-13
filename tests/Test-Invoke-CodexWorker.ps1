@@ -825,7 +825,7 @@ public static class FakeCodexWorker
     $result = Invoke-TestWorker -Task $task -Repository 'owner/project' -Case $case
     $arguments = @(Get-Content -LiteralPath $argsCapture -Encoding UTF8)
     foreach ($requiredArgument in @(
-        '--sandbox', 'workspace-write', '--ask-for-approval', 'never', '--cd',
+        '--sandbox', 'workspace-write', '--cd',
         '--disable', 'plugins', 'exec', '--ignore-user-config', '--json',
         '--color', 'never', '--output-last-message', '--output-schema', '-'
     )) {
@@ -859,6 +859,10 @@ public static class FakeCodexWorker
             Value = 'apps._default.enabled=false'
         },
         [pscustomobject]@{
+            Key = '-c'
+            Value = 'approval_policy="never"'
+        },
+        [pscustomobject]@{
             Key = '--disable'
             Value = 'plugins'
         }
@@ -870,10 +874,11 @@ public static class FakeCodexWorker
     }
     Assert-Equal `
         @($arguments | Where-Object { $_ -eq '-c' }).Count `
-        7 `
-        'exactly seven mandatory config overrides'
+        8 `
+        'exactly eight mandatory config overrides'
     foreach ($forbiddenArgument in @(
-        '--ephemeral', '--yolo', '--dangerously-bypass-approvals-and-sandbox',
+        '--ask-for-approval', '--approve-for-me', '--ephemeral', '--yolo',
+        '--dangerously-bypass-approvals-and-sandbox',
         'danger-full-access', '--skip-git-repo-check', '--search', '--add-dir',
         '--ignore-rules', '--dangerously-bypass-hook-trust'
     )) {
@@ -1184,8 +1189,8 @@ public static class FakeCodexWorker
         -Message 'project trust override must be a single TOML quoted dotted-key assignment'
     Assert-Equal `
         @($arguments | Where-Object { $_ -eq '-c' }).Count `
-        7 `
-        'all seven config overrides remain present'
+        8 `
+        'all eight config overrides remain present'
     $execIndex = [array]::IndexOf($arguments, 'exec')
     $ignoreUserConfigIndex = [array]::IndexOf($arguments, '--ignore-user-config')
     Assert-True `
