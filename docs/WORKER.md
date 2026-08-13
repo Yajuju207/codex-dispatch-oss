@@ -87,7 +87,7 @@ Worker 使用 Windows PowerShell 5.1 compatible process wrapper，异步收集 s
 -c projects."<exact-authorized-project-root>".trust_level="untrusted"
 --disable plugins
 --sandbox workspace-write
---ask-for-approval never
+-c approval_policy="never"
 --cd <authorized-project-root>
 exec
 --ignore-user-config
