@@ -4,6 +4,11 @@
 continuation layer. It is not an Issue-comment workflow and does not implement
 routing clarification.
 
+Project clarification for durable `routing/needs_input` is separately handled
+by Phase 6C-2B's [`Invoke-CodexDispatchRoutingResume.ps1`](ROUTING_RESUME_ORCHESTRATOR.md).
+That command selects a project for immutable State task; this command only
+continues an already-created Worker session in `worker/needs_input`.
+
 Its public parameters are exactly `DispatchId`, `Answer`, `IssueNumber`, and
 optional `ConfigPath`. The local Runtime State is authoritative: it supplies
 the repository identity and thread ID; neither is accepted from the caller or
