@@ -154,7 +154,7 @@ C:\CodexDispatch\control
 ```
 
 The private operator may replace that constant before activation, but it must
-remain a workflow constant鈥攏ot a dispatch input. The directory must already
+remain a workflow constant—not a dispatch input. The directory must already
 exist and contain:
 
 ```text
@@ -250,8 +250,8 @@ variables.
 ## Concurrency
 
 The Orchestrator is synchronous and supports one runspace per invocation. v0.1
-serializes the complete workflow鈥攊ncluding engine acquisition, Index rebuild,
-Worker execution, and projection鈥攚ith one constant group:
+serializes the complete workflow—including engine acquisition, Index rebuild,
+Worker execution, and projection—with one constant group:
 
 ```yaml
 concurrency:
@@ -307,6 +307,7 @@ Before copying the example to the private repository:
 
 ## Explicit exclusions
 
+The OSS engine provides Resume APIs, but this public control-plane contract does not activate them.
 This contract does not implement Runner registration, setup automation,
 `issue_comment`, active Resume triggers, `codex exec resume`, webhooks, schedules, daemons,
 cross-repository credentials, Index caching, artifact upload, or active public
