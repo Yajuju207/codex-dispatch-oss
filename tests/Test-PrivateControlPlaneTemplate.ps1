@@ -202,7 +202,7 @@ $shaMatch = [regex]::Match(
 )
 Assert-True $shaMatch.Success 'full lowercase engine SHA constant'
 Assert-Equal $shaMatch.Groups[1].Value `
-    'e311f659bc641ea9b824f3cfd17974dcaf3176d4' 'reviewed baseline SHA'
+    '6e85638b5251981061fc4ba5baa100e8a021ff3f' 'reviewed baseline SHA'
 Complete-Test 'engine is pinned to the reviewed full 40-character SHA'
 
 Assert-True ($template -match '(?m)^  CODEX_DISPATCH_ENGINE_REPOSITORY: https://github\.com/Yajuju207/codex-dispatch-oss\.git\r?$') `

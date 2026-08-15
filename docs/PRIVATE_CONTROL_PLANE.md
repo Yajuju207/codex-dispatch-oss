@@ -271,8 +271,9 @@ The template distinguishes:
 - `CONTROL_PLANE_PROCESS_FAILURE`: engine, configuration, Index, invocation, or
   result-contract failure; the workflow fails;
 - `DISPATCH_COMPLETED`: durable `worker/completed`; the workflow succeeds;
-- `DISPATCH_NEEDS_INPUT`: durable routing/Worker `needs_input`; the workflow
-  succeeds and waits for a future Phase 6C interaction design;
+- `DISPATCH_NEEDS_INPUT`: durable routing/Worker `needs_input`; a separately
+  reviewed resume workflow or local caller may continue the documented resume
+  contract;
 - `DISPATCH_EXECUTION_FAILED`: durable `worker/failed`; the lifecycle completed
   correctly and the workflow succeeds while reporting the failed dispatch;
 - `PROJECTION_FAILURE`: durable execution State exists but Issue publication
@@ -306,7 +307,8 @@ Before copying the example to the private repository:
 
 ## Explicit exclusions
 
+The OSS engine provides Resume APIs, but this public control-plane contract does not activate them.
 This contract does not implement Runner registration, setup automation,
-`issue_comment`, Resume, `codex exec resume`, webhooks, schedules, daemons,
+`issue_comment`, active Resume triggers, `codex exec resume`, webhooks, schedules, daemons,
 cross-repository credentials, Index caching, artifact upload, or active public
 workflows.
