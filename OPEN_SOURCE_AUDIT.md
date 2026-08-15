@@ -11,4 +11,3 @@ Release candidate: v0.1.0
 - Release review found no credential or private-data blocker in the candidate tree.
 
 Historical author metadata remains ordinary Git history and is not treated as a credential or deployment dependency.
-

@@ -28,4 +28,3 @@ foreach ($name in $scripts) {
 }
 
 Write-Host "Release verification scripts: $passed/$($scripts.Count) PASS"
-
