@@ -23,6 +23,13 @@ bypass, routing bypass, or Index path. `New-CodexDispatchState.ps1` generates a
 new dispatch ID for every invocation, including invocations with identical task
 text.
 
+When initial routing instead reaches `routing/needs_input`, Phase 6C-2B's
+[`Invoke-CodexDispatchRoutingResume.ps1`](ROUTING_RESUME_ORCHESTRATOR.md) may
+perform project clarification. It preserves immutable State task, uses Answer
+only as transient routing evidence, and invokes the Initial Worker with the
+original task after a repository is selected. This is separate from Phase
+6C-2A Worker-session resume.
+
 ## Project Index policy
 
 At invocation start, the Orchestrator resolves `project-index.json` in the
