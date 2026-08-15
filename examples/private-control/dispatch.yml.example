@@ -18,7 +18,7 @@ concurrency:
 
 env:
   CODEX_DISPATCH_ENGINE_REPOSITORY: https://github.com/Yajuju207/codex-dispatch-oss.git
-  CODEX_DISPATCH_ENGINE_SHA: e311f659bc641ea9b824f3cfd17974dcaf3176d4
+  CODEX_DISPATCH_ENGINE_SHA: 6e85638b5251981061fc4ba5baa100e8a021ff3f
   CODEX_DISPATCH_CONTROL_ROOT: C:\CodexDispatch\control
 
 jobs:
